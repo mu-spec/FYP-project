@@ -7,7 +7,13 @@ const BASE = '/api'
 
 async function handle(res) {
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`)
+  if (!res.ok) {
+    const err = new Error(data.error || `Request failed (${res.status})`)
+    // Mark validation rejections so the UI can show a dedicated
+    // "Invalid Job Description" state instead of a generic error.
+    err.invalid = !!data.invalid_input
+    throw err
+  }
   return data
 }
 

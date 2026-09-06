@@ -8,6 +8,8 @@ Endpoints
 GET    /api/health    -> service + model status (for frontend status pill)
 POST   /api/predict   -> {job_text, title} -> prediction, confidence,
                           probabilities, red flags, extracted signals
+                          (returns invalid_input=true 400 when the text is
+                           rejected by the pre-ML job-post validator)
 GET    /api/history   -> last N predictions (PRD 5.7)
 DELETE /api/history   -> clear prediction history
 
@@ -29,6 +31,7 @@ from scipy.sparse import csr_matrix, hstack
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from nlp_pipeline import (NUMERIC_FEATURES, clean_text, detect_red_flags,
                           extract_signals, rule_score)
+from input_validation import REJECT_MESSAGE, validate_job_text
 
 # ------------------------------------------------------------------- Config
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
@@ -153,8 +156,18 @@ def predict():
     job_text = (data.get("job_text") or "").strip()
     title    = (data.get("title") or "Untitled job").strip()[:200]
 
-    if len(job_text) < 40:
-        return jsonify({"error": "Job description too short — paste the full posting (min 40 chars)."}), 400
+    # ---- Job-Post Input Validation (application-level gate) -----------------
+    # Runs BEFORE preprocessing / feature extraction / XGBoost. Rejected input
+    # returns immediately and predict_one() (and the SQLite history insert) is
+    # never reached for it.
+    is_valid, reason = validate_job_text(job_text)
+    if not is_valid:
+        return jsonify({
+            "invalid_input": True,
+            "error": REJECT_MESSAGE,
+            "reason": reason,
+        }), 400
+
     if len(job_text) > 50_000:
         return jsonify({"error": "Job description too long (max 50,000 chars)."}), 400
 

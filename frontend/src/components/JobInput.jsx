@@ -10,7 +10,7 @@ export default function JobInput({ onAnalyze, onClear, loading }) {
   const [text, setText] = useState('')
 
   const charCount = text.length
-  const tooShort = charCount > 0 && charCount < 40
+  const hasText = text.trim().length > 0
 
   // History needs a job title → use the first line of the pasted post
   const derivedTitle = text.split('\n').map((l) => l.trim()).find(Boolean) || 'Untitled job'
@@ -30,8 +30,9 @@ export default function JobInput({ onAnalyze, onClear, loading }) {
         onChange={(e) => setText(e.target.value)}
       />
       <div className="textarea-meta">
-        <span className={tooShort ? 'warn-text' : ''}>
-          {charCount} characters {tooShort && '— too short, paste more text'}
+        <span>
+          {charCount} characters — non-job, gibberish or very short text is
+          rejected before ML analysis
         </span>
         <button type="button" className="link-btn" onClick={() => setText(SAMPLE)}>
           Load sample scam post
@@ -41,14 +42,14 @@ export default function JobInput({ onAnalyze, onClear, loading }) {
       <div className="btn-row">
         <button
           className="btn btn-primary"
-          disabled={loading || charCount < 40}
+          disabled={loading || !hasText}
           onClick={() => onAnalyze(text, derivedTitle.slice(0, 120))}
         >
           {loading ? '⏳ Analyzing…' : '🔍 Analyze Job'}
         </button>
         <button
           className="btn btn-secondary"
-          disabled={loading || (charCount === 0)}
+          disabled={loading || !hasText}
           onClick={handleClear}
         >
           ✖ Clear

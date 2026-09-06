@@ -171,6 +171,14 @@ body {
 .result-card { animation: resultIn .45s cubic-bezier(.2,.8,.3,1) both; }
 .result-card.scam  { border-color: #1f2937; background: linear-gradient(180deg, var(--scam-bg), #fff 60%); }
 .result-card.legit { border-color: #1f2937; background: linear-gradient(180deg, var(--legit-bg), #fff 60%); }
+/* Invalid / rejected-input state (validator stopped it before ML) */
+.result-card.invalid { border-color: #d97706; background: linear-gradient(180deg, #fffbeb, #fff 60%); }
+.badge-invalid { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.invalid-message {
+  margin: 20px 0; padding: 15px 18px; border-radius: 12px;
+  background: #fffbeb; border: 1px solid #fde68a; color: #92400e;
+  font-size: 1rem; line-height: 1.6;
+}
 
 .result-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
 

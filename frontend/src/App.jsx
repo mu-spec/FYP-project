@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import JobInput from './components/JobInput.jsx'
 import ResultCard from './components/ResultCard.jsx'
+import InvalidResult from './components/InvalidResult.jsx'
 import History from './components/History.jsx'
 import { analyzeJob, checkHealth } from './api.js'
 
@@ -9,6 +10,7 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
+  const [invalid, setInvalid] = useState(null)
   const [historyKey, setHistoryKey] = useState(0)
 
   useEffect(() => {
@@ -16,13 +18,19 @@ export default function App() {
   }, [])
 
   async function handleAnalyze(jobText, title) {
-    setLoading(true); setError(null); setResult(null)
+    setLoading(true); setError(null); setResult(null); setInvalid(null)
     try {
       const data = await analyzeJob(jobText, title)
+      // A valid prediction reached the ML pipeline -> show it & refresh history.
       setResult(data)
       setHistoryKey((k) => k + 1) // refresh history module
     } catch (e) {
-      setError(e.message)
+      if (e.invalid) {
+        // Backend rejected the input before ML -> dedicated "Invalid" card.
+        setInvalid(e.message || null)
+      } else {
+        setError(e.message)
+      }
     } finally {
       setLoading(false)
     }
@@ -31,6 +39,7 @@ export default function App() {
   function handleClear() {
     setResult(null)
     setError(null)
+    setInvalid(null)
   }
 
   return (
@@ -55,6 +64,7 @@ export default function App() {
         )}
 
         {/* ===== Result card ===== */}
+        {invalid && <InvalidResult message={invalid} />}
         {result && <ResultCard result={result} />}
 
         {/* ===== Search history ===== */}
