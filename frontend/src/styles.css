@@ -1,0 +1,286 @@
+/* ============================================================
+   AI-Based Job Scam Detection — modern light theme (v2)
+   ============================================================ */
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --muted: #64748b;
+  --primary: #2563eb;
+  --scam: #dc2626;
+  --scam-bg: #fef2f2;
+  --scam-border: #fecaca;
+  --legit: #16a34a;
+  --legit-bg: #f0fdf4;
+  --legit-border: #bbf7d0;
+  --warn: #d97706;
+  --radius: 18px;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, .05);
+  --shadow-md: 0 10px 30px -8px rgba(15, 23, 42, .12);
+  --shadow-card: 0 2px 4px rgba(15,23,42,.04), 0 12px 32px -12px rgba(15,23,42,.10);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  color: var(--text);
+  font-family: Arial, Helvetica, sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  background: var(--bg);   /* pure white */
+}
+
+::selection { background: rgba(99,102,241,.18); }
+
+.app { min-height: 100vh; }
+.container { max-width: 840px; margin: 0 auto; padding: 0 20px 60px; }
+
+/* ============ Title ============ */
+.app-header { text-align: center; padding: 34px 20px 12px; }
+
+.app-title {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: clamp(1.7rem, 4vw, 2.3rem);
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+  color: #0f172a;
+}
+
+.app-title::after {           /* thin dark accent line under the title */
+  content: "";
+  display: block;
+  width: 80px; height: 3px;
+  margin: 10px auto 0;
+  border-radius: 999px;
+  background: #1f2937;
+}
+
+.app-subtitle {
+  color: #1f2937;
+  margin-top: 12px;
+  font-size: .98rem;
+}
+
+/* ============ Cards ============ */
+.card {
+  background: var(--surface);
+  border: 1.5px solid #1f2937;          /* blackish borders (kept) */
+  border-radius: var(--radius);
+  padding: 26px 28px;
+  margin: 16px 0 24px;
+  box-shadow: var(--shadow-card);
+  transition: transform .2s ease, box-shadow .25s ease;
+}
+.card:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(15,23,42,.05), 0 18px 40px -14px rgba(15,23,42,.14); }
+
+.card-title { font-size: 1.28rem; font-weight: 700; letter-spacing: -0.2px; }
+.card-sub { color: var(--muted); font-size: .94rem; margin-top: 4px; word-break: break-word; }
+
+/* ============ Textarea (PRD 5.2) ============ */
+.textarea {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  color: var(--text);
+  padding: 16px 18px;
+  font-size: .95rem;
+  font-family: inherit;
+  line-height: 1.65;
+  resize: vertical;
+  min-height: 200px;
+  transition: border-color .18s, box-shadow .18s, background .18s;
+}
+.textarea::placeholder { color: #94a3b8; }
+.textarea:focus {
+  outline: none;
+  background: #fff;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, .12);
+}
+
+.textarea-meta {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: .82rem; color: var(--muted); margin-top: 10px;
+}
+.warn-text { color: var(--warn); font-weight: 600; }
+.link-btn {
+  background: none; border: none; color: var(--primary);
+  cursor: pointer; font-size: .83rem; font-weight: 600;
+  padding: 4px 8px; border-radius: 8px;
+  transition: background .15s;
+}
+.link-btn:hover { background: rgba(37,99,235,.08); }
+
+/* ============ Buttons ============ */
+.btn-row { display: flex; gap: 12px; margin-top: 20px; }
+.btn {
+  border: none; border-radius: 14px; cursor: pointer;
+  font-weight: 700; font-size: 1rem; padding: 15px 26px;
+  letter-spacing: .3px;
+  transition: transform .16s ease, box-shadow .2s ease, background .25s;
+}
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+
+/* Analyze Job — gradient + shine sweep + glow */
+.btn-primary {
+  flex: 1; color: #fff; position: relative; overflow: hidden;
+  background: linear-gradient(120deg, #2563eb 0%, #4f46e5 45%, #7c3aed 100%);
+  background-size: 200% 200%; background-position: 0% 50%;
+  box-shadow: 0 8px 20px -6px rgba(79,70,229,.55), inset 0 1px 0 rgba(255,255,255,.25);
+}
+.btn-primary::after {          /* shine sweep */
+  content: ""; position: absolute; top: 0; left: -80%;
+  width: 45%; height: 100%;
+  background: linear-gradient(105deg, transparent, rgba(255,255,255,.35), transparent);
+  transform: skewX(-22deg);
+  transition: left .55s ease;
+}
+.btn-primary:hover:not(:disabled) {
+  background-position: 100% 50%;
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px -8px rgba(79,70,229,.6), inset 0 1px 0 rgba(255,255,255,.25);
+}
+.btn-primary:hover:not(:disabled)::after { left: 130%; }
+.btn-primary:active:not(:disabled) { transform: translateY(0) scale(.985); box-shadow: 0 4px 12px -4px rgba(79,70,229,.5); }
+
+.btn-secondary {
+  background: #fff; color: var(--muted);
+  border: 1.5px solid #1f2937;
+  transition: background .15s, color .15s, transform .16s;
+}
+.btn-secondary:hover:not(:disabled) { background: var(--surface-2); color: var(--text); transform: translateY(-1px); }
+.btn-secondary:active:not(:disabled) { transform: scale(.98); }
+
+/* ============ Alerts ============ */
+@keyframes alertIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.alert { border-radius: 12px; padding: 14px 18px; margin: 18px 0; font-size: .94rem; animation: alertIn .25s ease; }
+.alert-error { background: var(--scam-bg); border: 1px solid var(--scam-border); color: var(--scam); }
+.alert code { background: rgba(0,0,0,.07); padding: 2px 7px; border-radius: 6px; font-size: .85em; }
+
+/* ============ Result card ============ */
+@keyframes resultIn {
+  from { opacity: 0; transform: translateY(18px) scale(.985); }
+  to   { opacity: 1; transform: none; }
+}
+.result-card { animation: resultIn .45s cubic-bezier(.2,.8,.3,1) both; }
+.result-card.scam  { border-color: #1f2937; background: linear-gradient(180deg, var(--scam-bg), #fff 60%); }
+.result-card.legit { border-color: #1f2937; background: linear-gradient(180deg, var(--legit-bg), #fff 60%); }
+
+.result-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+
+@keyframes pulseDot { 0%,100% { box-shadow: 0 0 0 0 rgba(255,255,255,.45); } 50% { box-shadow: 0 0 0 6px rgba(255,255,255,.12); } }
+.verdict-badge {
+  font-weight: 800; font-size: 1.02rem; padding: 11px 18px;
+  border-radius: 999px; color: #fff; letter-spacing: .2px;
+  display: inline-flex; align-items: center; gap: 9px;
+  box-shadow: var(--shadow-md);
+}
+.verdict-badge::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: #fff; animation: pulseDot 1.8s infinite; }
+.badge-scam  { background: linear-gradient(135deg, #ef4444, #dc2626); }
+.badge-legit { background: linear-gradient(135deg, #22c55e, #16a34a); }
+.mini-badge { font-size: .78rem; font-weight: 700; padding: 4px 12px; border-radius: 999px; color: #fff; }
+
+/* ---- Probability graph (PRD 5.5) ---- */
+.prob-graph { margin: 26px 0; display: flex; flex-direction: column; gap: 16px; }
+.prob-row { display: grid; grid-template-columns: 92px 1fr 66px; align-items: center; gap: 12px; }
+.prob-label { font-size: .88rem; font-weight: 600; color: var(--muted); }
+.prob-bar-track {
+  height: 14px; background: var(--surface-2);
+  border-radius: 999px; overflow: hidden;
+  border: 1px solid var(--border);
+  box-shadow: inset 0 1px 3px rgba(15,23,42,.06);
+}
+.prob-bar {
+  height: 100%; border-radius: 999px; position: relative;
+  transition: width 1s cubic-bezier(.22,.9,.3,1);
+  background-size: 200% 100%;
+}
+.prob-bar::after {             /* soft top shine */
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,.35), transparent 55%);
+  border-radius: 999px;
+}
+.scam-bar  { background-image: linear-gradient(90deg, #f87171, #dc2626); }
+.legit-bar { background-image: linear-gradient(90deg, #4ade80, #16a34a); }
+.prob-val { font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---- Red flags (PRD 5.6) ---- */
+.redflags h3 { font-size: 1.05rem; }
+.redflags ul { list-style: none; margin-top: 4px; }
+.redflags li {
+  background: var(--scam-bg);
+  border-left: 4px solid var(--scam);
+  padding: 11px 16px; border-radius: 10px; margin: 9px 0;
+  color: #881337; font-size: .93rem;
+  box-shadow: var(--shadow-sm);
+  display: flex; align-items: center;
+}
+.flag-icon { margin-right: 10px; font-size: 1.05rem; }
+.no-flags { color: var(--legit); margin: 14px 0; font-weight: 600; }
+
+/* ---- Signals details ---- */
+.signals-details { margin: 22px 0 6px; }
+.signals-details summary {
+  cursor: pointer; color: var(--primary); font-weight: 600; font-size: .92rem;
+  list-style: none; display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 10px; border-radius: 8px; transition: background .15s;
+}
+.signals-details summary:hover { background: rgba(37,99,235,.07); }
+.signals-details summary::before {
+  content: "▸"; display: inline-block; transition: transform .2s; color: var(--muted);
+}
+.signals-details[open] summary::before { transform: rotate(90deg); }
+.signals-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px; margin-top: 14px;
+}
+.signal-chip {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 9px 13px;
+  display: flex; justify-content: space-between; font-size: .83rem;
+  transition: border-color .15s, background .15s;
+}
+.signal-chip:hover { border-color: #c7d2fe; background: #eef2ff; }
+.signal-name { color: var(--muted); }
+.signal-val { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.recommendation {
+  margin-top: 20px; padding: 15px 18px;
+  background: linear-gradient(135deg, #eff6ff, #eef2ff);
+  border: 1px solid #c7d2fe; border-radius: 12px; color: #1e3a8a;
+  font-size: .95rem;
+}
+
+/* ============ History (PRD 5.7) ============ */
+.history-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); margin-top: 10px; }
+.table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.table th {
+  background: var(--surface-2); color: var(--muted);
+  font-weight: 700; font-size: .72rem; text-transform: uppercase; letter-spacing: .6px;
+}
+.table th, .table td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+.table tbody tr:last-child td { border-bottom: none; }
+.table tbody tr { transition: background .12s; }
+.table tbody tr:hover { background: #f1f5f9; }
+.td-title { max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ============ Scrollbars (modern touch) ============ */
+::-webkit-scrollbar { width: 10px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; border: 2px solid #fff; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ============ Responsive ============ */
+@media (max-width: 640px) {
+  .app-header { padding: 22px 16px 10px; }
+  .btn-row { flex-direction: column; }
+  .result-header { flex-direction: column; }
+  .card { padding: 20px; margin: 12px 0 20px; }
+}

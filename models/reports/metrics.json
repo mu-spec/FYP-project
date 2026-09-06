@@ -1,0 +1,87 @@
+{
+  "dataset": {
+    "raw_rows": 27014,
+    "after_dedup": 25278,
+    "train": 25922,
+    "test": 5056,
+    "features_tfidf": 10000,
+    "features_numeric": 11
+  },
+  "xgboost": {
+    "accuracy": 0.9998,
+    "precision": 0.9995,
+    "recall": 1.0,
+    "f1": 0.9998,
+    "roc_auc": 1.0,
+    "confusion_matrix": [
+      [
+        3055,
+        1
+      ],
+      [
+        0,
+        2000
+      ]
+    ],
+    "train_seconds": 28.2
+  },
+  "baseline_logreg": {
+    "accuracy": 0.999,
+    "f1": 0.9988,
+    "roc_auc": 0.9997
+  },
+  "generalization_probes": {
+    "correct": 7,
+    "total": 7,
+    "details": [
+      {
+        "name": "OBVIOUS SCAM \u2014 fee + gmail + weekly pay",
+        "expected": "Scam",
+        "p_scam": 0.9998,
+        "correct": true
+      },
+      {
+        "name": "SCAM \u2014 paraphrased, no template words",
+        "expected": "Scam",
+        "p_scam": 0.7562,
+        "correct": true
+      },
+      {
+        "name": "SCAM \u2014 gift card + urgency",
+        "expected": "Scam",
+        "p_scam": 0.9802,
+        "correct": true
+      },
+      {
+        "name": "LEGIT \u2014 mentions remote + salary",
+        "expected": "Legitimate",
+        "p_scam": 0.0036,
+        "correct": true
+      },
+      {
+        "name": "LEGIT \u2014 work from home, no fee",
+        "expected": "Legitimate",
+        "p_scam": 0.0039,
+        "correct": true
+      },
+      {
+        "name": "LEGIT \u2014 short classified ad",
+        "expected": "Legitimate",
+        "p_scam": 0.0014,
+        "correct": true
+      },
+      {
+        "name": "LEGIT \u2014 short ad with phone",
+        "expected": "Legitimate",
+        "p_scam": 0.0039,
+        "correct": true
+      }
+    ]
+  },
+  "augmentation": {
+    "scam_variants": 3000,
+    "hard_legit": 1500,
+    "short_legit": 1200,
+    "note": "Leakage-safe methodology: stratified split FIRST, then augmentation applied to TRAIN ONLY, and TF-IDF fitted on TRAIN only. Test set is pure held-out real data never seen during fitting."
+  }
+}

@@ -1,0 +1,62 @@
+# =========================
+# React / Node
+# =========================
+node_modules/
+frontend/node_modules/
+dist/
+build/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# =========================
+# Environment / Secrets
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# IDE / Editor
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# Operating System
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# Temporary / Logs
+# =========================
+*.log
+*.tmp
+*.temp
+
+# =========================
+# SQLite runtime files
+# =========================
+*.db-journal
+*.sqlite-journal
+*.sqlite3-journal
