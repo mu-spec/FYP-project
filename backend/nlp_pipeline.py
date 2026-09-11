@@ -36,10 +36,31 @@ NUMBER_RE   = re.compile(r"\d+")
 CURRENCY_RE = re.compile(r"[\$\u20ac\u00a3\u00a5]|usd|dollars?|euros?|pkr|rs\.?", re.I)
 SALARY_RE   = re.compile(r"salary|per\s*(hour|week|month|year)|/hr|/week|k/month|paid", re.I)
 FREE_MAIL_RE = re.compile(r"@(gmail|yahoo|hotmail|outlook|aol|proton|mail)\.", re.I)
-FEE_RE      = re.compile(r"(registration|processing|training|application|verification)\s*fee|"
-                         r"pay\s+\$|deposit|western\s*union|wire\s*transfer|"
-                         r"gift\s*card|bitcoin|easypaisa|jazz\s?cash|"
-                         r"mobile\s*wallet|advance\s*payment", re.I)
+# Upfront-payment evidence must contain an applicant-side payment action or
+# an explicit fee/charge condition. Do not use a bare "deposit"/"payment"
+# keyword: "direct deposit", payroll, salary and payment-by-check statements
+# describe compensation, not money requested from the applicant.
+_UPFRONT_FEE_ACTION_RE = re.compile(
+    r"\b(?:pay|send|transfer|wire|make|submit|cover|charge)\b"
+    r"[\s\S]{0,80}?\b(?:registration|processing|training|application|verification)?"
+    r"\s*(?:fee|charge)\b", re.I)
+_UPFRONT_DEPOSIT_ACTION_RE = re.compile(
+    r"\b(?:pay|send|transfer|wire|make|submit)\b[\s\S]{0,55}?\bdeposit\b", re.I)
+_UPFRONT_MONEY_ACTION_RE = re.compile(
+    r"\b(?:pay|send|transfer|wire)\b[\s\S]{0,55}?"
+    r"(?:[$€£¥]\s?\d[\d,]*(?:\.\d+)?|\b\d+\s*(?:usd|dollars?|pkr|rs\.?)\b)", re.I)
+_UPFRONT_SERVICE_ACTION_RE = re.compile(
+    r"\b(?:pay|send|transfer|wire)\b[\s\S]{0,80}?\b"
+    r"(?:western\s*union|gift\s*card|bitcoin|easypaisa|jazz\s?cash|mobile\s*wallet)\b", re.I)
+_UPFRONT_REQUIRED_FEE_RE = re.compile(
+    r"\b(?:registration|processing|training|application|verification)?\s*"
+    r"(?:fee|charge)\b[\s\S]{0,70}?\b(?:required|must|before|prior|condition)\b", re.I)
+_UPFRONT_REQUIRED_PAYMENT_RE = re.compile(
+    r"\b(?:upfront|advance)\s+(?:payment|fee|charge)\b[\s\S]{0,60}?"
+    r"\b(?:required|must|before|prior|condition)\b", re.I)
+_UPFRONT_PURCHASE_RE = re.compile(
+    r"\b(?:purchase|buy)\b[\s\S]{0,80}?\b"
+    r"(?:equipment|kit|package|materials|course|training|supplies)\b", re.I)
 
 URGENCY_WORDS = [
     "urgent", "immediately", "immediate", "hurry", "asap",
@@ -185,6 +206,51 @@ def _flag(icon: str, weight: float, message: str, category: str,
     }
 
 
+def _is_negated_payment_phrase(text: str, match) -> bool:
+    """Reject phrases explicitly saying that no fee/payment is required."""
+    prefix = text[max(0, match.start() - 32):match.start()].lower()
+    return bool(re.search(r"\b(?:no|without|never|not)\b(?:\s+\w+){0,3}\s*$", prefix))
+
+
+def _is_compensation_context(match) -> bool:
+    """A payment-method/compensation phrase is not an applicant fee request."""
+    matched = match.group(0).lower()
+    return any(phrase in matched for phrase in (
+        "direct deposit", "payment by check", "paid by check", "payroll",
+        "salary", "compensation",
+    ))
+
+
+def _upfront_payment_matches(text: str):
+    """Return only scoped applicant-payment matches from the raw job text.
+
+    This is intentionally narrower than the former bare-keyword rule. A
+    salary/payment method such as "paid by direct deposit" must not fire the
+    upfront-payment category, while an applicant action such as "send a deposit
+    through Easypaisa" must fire it.
+    """
+    patterns = (
+        _UPFRONT_FEE_ACTION_RE,
+        _UPFRONT_DEPOSIT_ACTION_RE,
+        _UPFRONT_MONEY_ACTION_RE,
+        _UPFRONT_SERVICE_ACTION_RE,
+        _UPFRONT_REQUIRED_FEE_RE,
+        _UPFRONT_REQUIRED_PAYMENT_RE,
+        _UPFRONT_PURCHASE_RE,
+    )
+    matches = []
+    seen_spans = set()
+    for pattern in patterns:
+        for match in pattern.finditer(text):
+            if _is_negated_payment_phrase(text, match) or _is_compensation_context(match):
+                continue
+            span = (match.start(), match.end())
+            if span not in seen_spans:
+                seen_spans.add(span)
+                matches.append(match)
+    return sorted(matches, key=lambda match: (match.start(), -(match.end() - match.start())))
+
+
 def detect_red_flags(text: str, signals: dict) -> list:
     """Human-readable red flags plus evidence from the submitted raw text."""
     t = str(text)
@@ -225,8 +291,8 @@ def detect_red_flags(text: str, signals: dict) -> list:
             _evidence_for_matches(t, phone_matches),
         ))
 
-    fee_matches = list(FEE_RE.finditer(t))
-    if FEE_RE.search(lower):
+    fee_matches = _upfront_payment_matches(t)
+    if fee_matches:
         flags.append(_flag(
             "💸", 0.45,
             "Requests money up front (registration/processing fee, deposit, gift card, Easypaisa/JazzCash)",

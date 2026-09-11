@@ -11,7 +11,6 @@ weights, while snippets/categories/severity/explanations are display metadata.
 import json
 import os
 import sqlite3
-import sys
 import tempfile
 import unittest
 
@@ -29,6 +28,13 @@ LEGIT_TEXT = (
     "reliability. The role includes a clear development plan, paid leave, and "
     "access to health coverage. Candidates should share a portfolio and describe "
     "relevant projects."
+)
+
+COMPENSATION_TEXT = (
+    "Operations Associate job. We are hiring a reliable coordinator to support "
+    "our team. Weekly payments via Direct Deposit or Check. Responsibilities "
+    "include scheduling, record keeping, and communication with customers. "
+    "Apply through the company careers portal."
 )
 
 
@@ -56,6 +62,56 @@ class EvidenceRuleTests(unittest.TestCase):
     def test_legitimate_text_has_no_major_indicators(self):
         flags = detect_red_flags(LEGIT_TEXT, extract_signals(LEGIT_TEXT))
         self.assertEqual(flags, [])
+
+    def test_compensation_phrases_are_not_upfront_payment(self):
+        compensation_phrases = [
+            "Weekly payments via Direct Deposit or Check.",
+            "Salary is paid weekly by direct deposit.",
+        ]
+        for text in compensation_phrases:
+            with self.subTest(text=text):
+                flags = detect_red_flags(text, extract_signals(text))
+                categories = {flag["category"] for flag in flags}
+                self.assertNotIn("UPFRONT PAYMENT", categories)
+
+    def test_explicit_registration_fee_is_upfront_payment(self):
+        text = "Pay a $99 registration fee before starting."
+        flags = detect_red_flags(text, extract_signals(text))
+        payment = next(flag for flag in flags if flag["category"] == "UPFRONT PAYMENT")
+        self.assertTrue(any("$99" in snippet and "registration fee" in snippet.lower()
+                            for snippet in payment["evidence"]))
+
+    def test_explicit_easypaisa_deposit_is_upfront_payment(self):
+        text = "Send a deposit through Easypaisa to secure the position."
+        flags = detect_red_flags(text, extract_signals(text))
+        payment = next(flag for flag in flags if flag["category"] == "UPFRONT PAYMENT")
+        self.assertTrue(any("deposit" in snippet.lower() and "easypaisa" in snippet.lower()
+                            for snippet in payment["evidence"]))
+
+    def test_supported_categories_have_category_specific_evidence(self):
+        text = (
+            "URGENT APPLY NOW! Act fast! Earn $9000/week. No experience required. "
+            "Pay a $99 registration fee before starting. Email hire@gmail.com, "
+            "call +1 555 123 4567, and apply at https://example.com/jobs. "
+            "BUY NOW! " + ("REMOTE ROLE " * 30)
+        )
+        flags = detect_red_flags(text, extract_signals(text))
+        evidence_by_category = {
+            flag["category"]: " ".join(flag["evidence"]).lower()
+            for flag in flags
+        }
+        self.assertIn("@gmail.com", evidence_by_category["FREE WEBMAIL"])
+        self.assertIn("http", evidence_by_category["EXTERNAL LINK"])
+        self.assertRegex(evidence_by_category["PERSONAL CONTACT"], r"\d")
+        self.assertIn("registration fee", evidence_by_category["UPFRONT PAYMENT"])
+        self.assertTrue(any(term in evidence_by_category["URGENCY PRESSURE"]
+                            for term in ("urgent", "apply now")))
+        self.assertIn("no experience", evidence_by_category["HIGH PAY + NO EXPERIENCE"])
+        self.assertIn("!", evidence_by_category["EXCESSIVE PUNCTUATION"])
+        self.assertTrue(any(character.isupper() for character in
+                            " ".join(next(flag["evidence"] for flag in flags
+                                          if flag["category"] == "EXCESSIVE CAPITALIZATION"))))
+        self.assertIn("$9000/week", evidence_by_category["UNREALISTIC PAY"])
 
 
 class EvidenceApiTests(unittest.TestCase):
@@ -102,6 +158,16 @@ class EvidenceApiTests(unittest.TestCase):
         body = response.get_json()
         self.assertEqual(body["red_flags"], [])
         self.assertIn("probabilities", body)
+
+    def test_compensation_phrase_does_not_add_hybrid_rule_score(self):
+        response = self._post(COMPENSATION_TEXT, "compensation evidence")
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertEqual(body["red_flags"], [])
+        self.assertEqual(body["engine"]["rule_scam_score"], 0.0)
+        # With no deterministic rule contribution, final scam probability is
+        # the unchanged raw XGBoost scam probability for this same text.
+        self.assertEqual(body["probabilities"]["scam"], body["engine"]["xgboost_scam_prob"])
 
     def test_invalid_input_is_rejected_before_evidence_or_history(self):
         before = self.client.get("/api/history").get_json()
