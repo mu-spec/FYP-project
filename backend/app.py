@@ -7,7 +7,8 @@ Endpoints
 ---------
 GET    /api/health    -> service + model status (for frontend status pill)
 POST   /api/predict   -> {job_text, title} -> prediction, confidence,
-                          probabilities, red flags, extracted signals
+                          probabilities, evidence-enriched red flags,
+                          extracted signals
                           (returns invalid_input=true 400 when the text is
                            rejected by the pre-ML job-post validator)
 GET    /api/history   -> last N predictions (PRD 5.7)
@@ -16,6 +17,7 @@ DELETE /api/history   -> clear prediction history
 Run:  python app.py          (http://localhost:5000)
 """
 
+import json
 import os
 import sqlite3
 import sys
@@ -75,15 +77,21 @@ def init_db():
     with sqlite3.connect(DB_PATH) as db:
         db.execute("""
             CREATE TABLE IF NOT EXISTS predictions (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                job_title   TEXT    NOT NULL,
-                prediction  TEXT    NOT NULL,
-                confidence  REAL    NOT NULL,
-                created_at  TEXT    NOT NULL
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_title     TEXT    NOT NULL,
+                prediction    TEXT    NOT NULL,
+                confidence    REAL    NOT NULL,
+                created_at    TEXT    NOT NULL,
+                evidence_json TEXT
             )
         """)
+        # Existing Milestone 1 databases have no evidence column. Add the
+        # nullable column in place so old rows remain readable and valid.
+        columns = {row[1] for row in db.execute("PRAGMA table_info(predictions)")}
+        if "evidence_json" not in columns:
+            db.execute("ALTER TABLE predictions ADD COLUMN evidence_json TEXT")
 
-init_db()  # ensure table exists at startup
+init_db()  # ensure table exists and old databases are migrated at startup
 
 # --------------------------------------------------------------- Prediction
 def build_features(raw_text: str):
@@ -176,9 +184,12 @@ def predict():
     # PRD 5.7 — store prediction history
     db = get_db()
     db.execute(
-        "INSERT INTO predictions (job_title, prediction, confidence, created_at) VALUES (?,?,?,?)",
+        "INSERT INTO predictions "
+        "(job_title, prediction, confidence, created_at, evidence_json) "
+        "VALUES (?,?,?,?,?)",
         (result["job_title"], result["prediction"], result["confidence"],
-         datetime.now(timezone.utc).isoformat()),
+         datetime.now(timezone.utc).isoformat(),
+         json.dumps(result.get("red_flags", []), ensure_ascii=False)),
     )
     db.commit()
 
@@ -188,10 +199,20 @@ def predict():
 def history():
     limit = min(int(request.args.get("limit", 50)), 200)
     rows = get_db().execute(
-        "SELECT id, job_title, prediction, confidence, created_at "
+        "SELECT id, job_title, prediction, confidence, created_at, evidence_json "
         "FROM predictions ORDER BY id DESC LIMIT ?", (limit,),
     ).fetchall()
-    return jsonify([dict(r) for r in rows])
+    history_rows = []
+    for row in rows:
+        item = dict(row)
+        raw_evidence = item.pop("evidence_json", None)
+        try:
+            item["evidence"] = json.loads(raw_evidence) if raw_evidence else []
+        except (TypeError, json.JSONDecodeError):
+            # Keep old/corrupt rows usable without failing the whole history.
+            item["evidence"] = []
+        history_rows.append(item)
+    return jsonify(history_rows)
 
 @app.delete("/api/history")
 def clear_history():

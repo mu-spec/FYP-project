@@ -2,12 +2,38 @@ import Icon from './Icon.jsx'
 
 const clamp = (value) => Math.max(0, Math.min(1, Number(value) || 0))
 const fmtPct = (value) => `${(clamp(value) * 100).toFixed(2)}%`
+const SEVERITY_ORDER = ['High', 'Medium', 'Low']
 
 function riskLevel(probability) {
   if (probability >= 0.75) return ['High risk', 'high']
   if (probability >= 0.5) return ['Elevated risk', 'elevated']
   if (probability >= 0.25) return ['Caution', 'caution']
   return ['Lower risk', 'lower']
+}
+
+function EvidenceCard({ flag }) {
+  const evidence = Array.isArray(flag.evidence) ? flag.evidence.filter(Boolean) : []
+  const severity = flag.severity || 'Low'
+
+  return (
+    <article className={`evidence-card evidence-${severity.toLowerCase()}`}>
+      <div className="evidence-card-top">
+        <div className="evidence-category">
+          <span className="flag-marker"><Icon name="warning" size={15} /></span>
+          <strong>{flag.category || 'DETECTED SIGNAL'}</strong>
+        </div>
+        <span className={`severity-badge severity-${severity.toLowerCase()}`}>{severity}</span>
+      </div>
+      {evidence.length > 0 && (
+        <div className="evidence-snippets" aria-label="Matched text from the job description">
+          {evidence.map((snippet, index) => (
+            <blockquote key={`${snippet}-${index}`}>“{snippet}”</blockquote>
+          ))}
+        </div>
+      )}
+      <p className="evidence-explanation">{flag.explanation || flag.message}</p>
+    </article>
+  )
 }
 
 export default function ResultCard({ result }) {
@@ -20,9 +46,11 @@ export default function ResultCard({ result }) {
     job_title: jobTitle,
   } = result
   const scamProbability = clamp(probabilities.scam)
-  const legitimateProbability = clamp(probabilities.legitimate)
   const isScam = prediction === 'Scam'
   const [riskLabel, riskTone] = riskLevel(scamProbability)
+  const groupedFlags = SEVERITY_ORDER
+    .map((severity) => ({ severity, flags: redFlags.filter((flag) => flag.severity === severity) }))
+    .filter((group) => group.flags.length > 0)
 
   return (
     <section className={`result-dashboard card-surface ${isScam ? 'scam-result' : 'legit-result'}`}>
@@ -67,36 +95,47 @@ export default function ResultCard({ result }) {
         <div className="risk-scale-labels"><span>0% lower risk</span><span>50% review carefully</span><span>100% higher risk</span></div>
       </div>
 
-      <div className="result-content-grid">
-        <section className="flags-panel">
-          <div className="subsection-heading">
-            <div><span className="section-label">Evidence</span><h3>Detected red flags</h3></div>
-            <span className={`count-badge ${redFlags.length ? 'has-flags' : 'no-flag-badge'}`}>{redFlags.length}</span>
-          </div>
-          {redFlags.length > 0 ? (
-            <ul className="result-flags">
-              {redFlags.map((flag, index) => (
-                <li key={`${flag.message}-${index}`}>
-                  <span className="flag-marker"><Icon name="warning" size={15} /></span>
-                  <span>{flag.message}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="no-flags-state"><span><Icon name="check" size={17} /></span><p>No major red flags were detected in this text.</p></div>
-          )}
-        </section>
-
-        <aside className={`recommendation-panel ${isScam ? 'recommendation-scam' : 'recommendation-legit'}`}>
-          <span className="recommendation-icon"><Icon name={isScam ? 'warning' : 'check'} size={18} /></span>
+      <div className="evidence-map-panel">
+        <div className="evidence-map-heading">
           <div>
-            <span className="section-label">Recommended next step</span>
-            <p>{isScam
-              ? 'Do not send money or personal documents. Verify the employer through an official website and independent sources before taking any action.'
-              : 'Proceed thoughtfully. Verify the employer and offer through an official channel before sharing personal information.'}</p>
+            <span className="section-label">Evidence map</span>
+            <h3>Text signals found in the posting</h3>
+            <p>Each item below is linked to a deterministic rule that fired on this submitted text.</p>
           </div>
-        </aside>
+          <span className={`count-badge ${redFlags.length ? 'has-flags' : 'no-flag-badge'}`}>{redFlags.length}</span>
+        </div>
+
+        {groupedFlags.length > 0 ? (
+          <div className="evidence-groups">
+            {groupedFlags.map((group) => (
+              <section className="evidence-group" key={group.severity}>
+                <div className={`severity-heading severity-heading-${group.severity.toLowerCase()}`}><span />{group.severity} severity</div>
+                <div className="evidence-list">
+                  {group.flags.map((flag, index) => <EvidenceCard key={`${flag.category || flag.message}-${index}`} flag={flag} />)}
+                </div>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <div className="no-flags-state">
+            <span><Icon name="check" size={17} /></span>
+            <div>
+              <p>No major scam indicators were detected.</p>
+              <small>This does not guarantee employer legitimacy. Verify the employer independently before sharing money or personal information.</small>
+            </div>
+          </div>
+        )}
       </div>
+
+      <aside className={`recommendation-panel ${isScam ? 'recommendation-scam' : 'recommendation-legit'}`}>
+        <span className="recommendation-icon"><Icon name={isScam ? 'warning' : 'check'} size={18} /></span>
+        <div>
+          <span className="section-label">Recommended next step</span>
+          <p>{isScam
+            ? 'Do not send money or personal documents. Verify the employer through an official website and independent sources before taking any action.'
+            : 'Proceed thoughtfully. Verify the employer and offer through an official channel before sharing personal information.'}</p>
+        </div>
+      </aside>
 
       <details className="technical-details">
         <summary><Icon name="chart" size={16} /> View technical signals</summary>
