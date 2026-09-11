@@ -1,29 +1,23 @@
-// Rendered when the backend rejects the submitted text as not being a valid
-// job description. Deliberately shows NO Scam/Legitimate verdict, no confidence
-// and no probability graph — the text never reached the ML classifier.
+import Icon from './Icon.jsx'
+
 export default function InvalidResult({ message }) {
   return (
-    <div className="card result-card invalid">
-      <div className="result-header">
+    <section className="invalid-result card-surface" role="alert">
+      <div className="invalid-result-header">
+        <span className="state-icon caution"><Icon name="warning" size={21} /></span>
         <div>
-          <h2 className="card-title">⚠️ Invalid Job Description</h2>
-          <p className="card-sub">
-            This input was rejected before ML analysis — it does not look like a
-            job posting.
-          </p>
+          <span className="section-label">Input not analyzed</span>
+          <h2>Invalid Job Description</h2>
         </div>
-        <div className="verdict-badge badge-invalid">Not analyzed</div>
+        <span className="state-badge caution-badge">Not analyzed</span>
       </div>
-
-      <div className="invalid-message">
+      <p className="invalid-result-message">
         {message || 'The provided text does not appear to be a valid job description. Please paste a complete job advertisement.'}
+      </p>
+      <div className="invalid-next-step">
+        <strong>Try again with a complete listing.</strong>
+        <span>Include the role, project scope, responsibilities or required skills. The model was not run for this input.</span>
       </div>
-
-      <div className="recommendation">
-        <strong>What to do:</strong> Paste the full text of a job advertisement
-        (title, required skills, project scope, or responsibilities). Short
-        greetings, random text and non-job prose will not be classified.
-      </div>
-    </div>
+    </section>
   )
 }

@@ -1,59 +1,77 @@
-import { useState } from 'react'
+import Icon from './Icon.jsx'
 
-// PRD 5.2 — Job Input Module: paste job description + Analyze & Clear buttons
 const SAMPLE = `Warehouse Associate — Earn $6,000/week from home!
 NO experience needed, NO degree required. Immediate hiring, positions filling FAST!
 Just pay a $99 registration fee to secure your spot. Contact hiring.manager2024@gmail.com
 or WhatsApp +1 555 012 3456. Apply now at www.quick-hire-jobs.biz !!!`
 
-export default function JobInput({ onAnalyze, onClear, loading }) {
-  const [text, setText] = useState('')
-
+export default function JobInput({
+  value = '',
+  onChange,
+  onAnalyze,
+  onClear,
+  loading = false,
+  variant = 'analysis',
+  showSample = false,
+}) {
+  const text = value || ''
   const charCount = text.length
   const hasText = text.trim().length > 0
+  const tooLong = charCount > 50_000
+  const derivedTitle = text.split('\n').map((line) => line.trim()).find(Boolean) || 'Untitled job'
 
-  // History needs a job title → use the first line of the pasted post
-  const derivedTitle = text.split('\n').map((l) => l.trim()).find(Boolean) || 'Untitled job'
+  const validationMessage = !hasText
+    ? 'Paste a job description to continue.'
+    : tooLong
+      ? 'This description is too long. The maximum is 50,000 characters.'
+      : 'Short genuine posts can pass; non-job or gibberish text is rejected before ML analysis.'
 
-  function handleClear() {
-    setText('')
-    onClear?.()
+  function handleAnalyze() {
+    if (!hasText || tooLong || loading) return
+    onAnalyze?.(text, derivedTitle.slice(0, 120))
   }
 
   return (
-    <div className="card">
+    <div className={`job-input ${variant}`}>
+      <label className="sr-only" htmlFor={`${variant}-job-text`}>Job description</label>
       <textarea
-        className="textarea"
-        rows={10}
-        placeholder="Paste the complete job post here…"
+        id={`${variant}-job-text`}
+        className="job-textarea"
+        rows={variant === 'home' ? 7 : 13}
+        placeholder="Paste the complete job advertisement here…"
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(event) => onChange?.(event.target.value)}
+        aria-describedby={`${variant}-input-note`}
       />
-      <div className="textarea-meta">
-        <span>
-          {charCount} characters — non-job, gibberish or very short text is
-          rejected before ML analysis
+      <div className="input-meta">
+        <span className={tooLong ? 'validation-error' : ''}>
+          {charCount.toLocaleString()} characters
         </span>
-        <button type="button" className="link-btn" onClick={() => setText(SAMPLE)}>
-          Load sample scam post
-        </button>
+        {showSample && (
+          <button type="button" className="sample-link" onClick={() => onChange?.(SAMPLE)}>
+            Use sample post
+          </button>
+        )}
       </div>
-
-      <div className="btn-row">
+      <div id={`${variant}-input-note`} className={`input-note ${!hasText || tooLong ? 'attention' : ''}`}>
+        <span className="input-note-icon"><Icon name={tooLong ? 'warning' : 'info'} size={14} /></span>
+        <span>{validationMessage}</span>
+      </div>
+      <div className="input-actions">
         <button
-          className="btn btn-primary"
-          disabled={loading || !hasText}
-          onClick={() => onAnalyze(text, derivedTitle.slice(0, 120))}
+          type="button"
+          className="btn btn-primary btn-analyze"
+          disabled={loading || !hasText || tooLong}
+          onClick={handleAnalyze}
         >
-          {loading ? '⏳ Analyzing…' : '🔍 Analyze Job'}
+          <Icon name="search" size={18} />
+          {loading ? 'Analyzing…' : 'Analyze Job'}
         </button>
-        <button
-          className="btn btn-secondary"
-          disabled={loading || !hasText}
-          onClick={handleClear}
-        >
-          ✖ Clear
-        </button>
+        {hasText && (
+          <button type="button" className="quiet-action" onClick={() => onClear?.()} disabled={loading}>
+            Clear
+          </button>
+        )}
       </div>
     </div>
   )
