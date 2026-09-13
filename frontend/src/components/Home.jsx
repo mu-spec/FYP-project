@@ -1,4 +1,5 @@
 import Icon from './Icon.jsx'
+import InvalidResult from './InvalidResult.jsx'
 import JobInput from './JobInput.jsx'
 
 const VALUE_POINTS = [
@@ -32,7 +33,7 @@ const SCAM_WARNINGS = [
   ['Off-platform requests', 'Personal email, messaging apps or payment links can hide the real employer.'],
 ]
 
-export default function Home({ value, onChange, onAnalyze, onClear, loading, onNavigate }) {
+export default function Home({ value, onChange, onAnalyze, onClear, loading, invalid, error, backendUp, onNavigate }) {
   return (
     <main className="home-page">
       <div className="container-wide">
@@ -70,6 +71,14 @@ export default function Home({ value, onChange, onAnalyze, onClear, loading, onN
             />
           </div>
         </section>
+
+        {error && (
+          <div className="inline-alert error-alert home-feedback" role="alert">
+            <Icon name="warning" size={18} />
+            <div><strong>We could not complete the analysis.</strong><span>{error}{!backendUp && ' Check that the Flask backend is running.'}</span></div>
+          </div>
+        )}
+        {invalid && <div className="home-feedback"><InvalidResult message={invalid} /></div>}
 
         <section className="value-grid" aria-label="Product benefits">
           {VALUE_POINTS.map((point) => (

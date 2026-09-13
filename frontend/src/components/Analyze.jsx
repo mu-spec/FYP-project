@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react'
 import Icon from './Icon.jsx'
 import JobInput from './JobInput.jsx'
 import ResultCard from './ResultCard.jsx'
@@ -8,56 +7,48 @@ export default function Analyze({
   value,
   onChange,
   onAnalyze,
-  onAutoSubmit,
-  autoSubmit,
-  onAutoSubmitConsumed,
   onClear,
   loading,
   error,
   invalid,
   result,
   backendUp,
+  homeInitiated = false,
 }) {
-  const consumedAutoSubmitId = useRef(null)
-
-  useEffect(() => {
-    if (!autoSubmit?.jobText || consumedAutoSubmitId.current === autoSubmit.id) return
-
-    // Analyze owns the route-entry handoff. Mark it consumed before calling the
-    // request so re-renders, StrictMode and the state-clearing update cannot
-    // submit the same Home payload a second time.
-    consumedAutoSubmitId.current = autoSubmit.id
-    const { id, jobText, title } = autoSubmit
-    onAutoSubmitConsumed?.(id)
-    onAutoSubmit?.(jobText, title)
-  }, [autoSubmit, onAutoSubmit, onAutoSubmitConsumed])
+  // A successful Home submission arrives here with its result already ready.
+  // Keep this route result-only so the user never sees a second "Review" step.
+  const showManualWorkspace = !homeInitiated
 
   return (
     <main className="page-shell analyze-page">
       <div className="container-narrow">
-        <div className="page-intro">
-          <div className="eyebrow"><span className="eyebrow-line" /> Analysis workspace</div>
-          <h1>Review a job posting</h1>
-          <p>Paste the listing below. The text is validated first, then analyzed with the existing NLP and XGBoost pipeline.</p>
-        </div>
-
-        <section className="analysis-card card-surface">
-          <div className="analysis-card-header">
-            <div>
-              <span className="section-label">Job description</span>
-              <h2>What are you being offered?</h2>
+        {showManualWorkspace && (
+          <>
+            <div className="page-intro">
+              <div className="eyebrow"><span className="eyebrow-line" /> Analysis workspace</div>
+              <h1>Review a job posting</h1>
+              <p>Paste the listing below. The text is validated first, then analyzed with the existing NLP and XGBoost pipeline.</p>
             </div>
-            <span className="secure-label"><Icon name="lock" size={15} /> Pre-screened before analysis</span>
-          </div>
-          <JobInput
-            value={value}
-            onChange={onChange}
-            onAnalyze={onAnalyze}
-            onClear={onClear}
-            loading={loading}
-            variant="analysis"
-          />
-        </section>
+
+            <section className="analysis-card card-surface">
+              <div className="analysis-card-header">
+                <div>
+                  <span className="section-label">Job description</span>
+                  <h2>What are you being offered?</h2>
+                </div>
+                <span className="secure-label"><Icon name="lock" size={15} /> Pre-screened before analysis</span>
+              </div>
+              <JobInput
+                value={value}
+                onChange={onChange}
+                onAnalyze={onAnalyze}
+                onClear={onClear}
+                loading={loading}
+                variant="analysis"
+              />
+            </section>
+          </>
+        )}
 
         {error && (
           <div className="inline-alert error-alert" role="alert">

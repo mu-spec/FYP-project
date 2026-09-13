@@ -25,10 +25,11 @@ export default function App() {
   const [error, setError] = useState(null)
   const [invalid, setInvalid] = useState(null)
   const [historyKey, setHistoryKey] = useState(0)
-  const [autoSubmit, setAutoSubmit] = useState(null)
+  const [homeAnalysisResult, setHomeAnalysisResult] = useState(false)
 
-  const nextAutoSubmitId = useRef(0)
-  const autoSubmitInFlight = useRef(false)
+  // This ref is shared by Home and the manual Analyze form. It is the final
+  // request gate, so a rapid double-click cannot create a second prediction.
+  const analysisInFlight = useRef(false)
 
   useEffect(() => {
     const handleHashChange = () => setPage(initialPage())
@@ -41,18 +42,18 @@ export default function App() {
 
   function navigate(nextPage) {
     const next = PAGES.has(nextPage) ? nextPage : 'home'
-    // A pending Home handoff is meaningful only for the immediate Analyze
-    // navigation. Discard it if the user chooses another page first.
-    if (next !== 'analyze') setAutoSubmit(null)
+    // A result-only Analyze view is valid only for the current Home success.
+    // Any later navigation resets that source marker. It is not persisted, so
+    // refreshing #analyze always behaves like direct/manual navigation.
+    if (next !== 'analyze') setHomeAnalysisResult(false)
     setPage(next)
     window.history.replaceState(null, '', `#${next}`)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  async function runPrediction(jobText, title) {
-    // This is the single request gate for both automatic and manual submits.
-    if (autoSubmitInFlight.current) return
-    autoSubmitInFlight.current = true
+  async function runPrediction(jobText, title, { fromHome = false } = {}) {
+    if (analysisInFlight.current) return false
+    analysisInFlight.current = true
     setLoading(true)
     setError(null)
     setInvalid(null)
@@ -61,36 +62,38 @@ export default function App() {
       const data = await analyzeJob(jobText, title)
       setResult(data)
       setHistoryKey((key) => key + 1)
+      if (fromHome) {
+        // The request has already completed successfully. Navigate directly
+        // to the result view; Analyze will not render its manual intro/form.
+        setHomeAnalysisResult(true)
+        navigate('analyze')
+      }
+      return true
     } catch (err) {
       if (err.invalid) setInvalid(err.message || null)
       else setError(err.message || 'The analysis service is unavailable.')
+      // Invalid/network failures stay on Home when Home initiated the request.
+      // This prevents an unnecessary route change with no result to show.
+      return false
     } finally {
-      autoSubmitInFlight.current = false
+      analysisInFlight.current = false
       setLoading(false)
     }
   }
 
   function handleHomeAnalyze(jobText, title) {
-    if (autoSubmitInFlight.current || autoSubmit) return
-    const id = nextAutoSubmitId.current + 1
-    nextAutoSubmitId.current = id
-    // The intent is held in memory only. It is not encoded in the URL, so a
-    // browser refresh on #analyze cannot replay it.
-    setDraft(jobText)
-    setAutoSubmit({ id, jobText, title })
-    navigate('analyze')
+    // The existing backend validator remains the source of truth. Empty text
+    // is already disabled by JobInput; all other text is sent exactly once.
+    runPrediction(jobText, title, { fromHome: true })
   }
 
   function handleManualAnalyze(jobText, title) {
+    setHomeAnalysisResult(false)
     runPrediction(jobText, title)
   }
 
-  function consumeAutoSubmit(id) {
-    setAutoSubmit((current) => (current?.id === id ? null : current))
-  }
-
   function handleClear() {
-    setAutoSubmit(null)
+    setHomeAnalysisResult(false)
     setDraft('')
     setResult(null)
     setError(null)
@@ -107,6 +110,9 @@ export default function App() {
           onAnalyze={handleHomeAnalyze}
           onClear={handleClear}
           loading={loading}
+          invalid={invalid}
+          error={error}
+          backendUp={backendUp}
           onNavigate={navigate}
         />
       )}
@@ -115,15 +121,13 @@ export default function App() {
           value={draft}
           onChange={setDraft}
           onAnalyze={handleManualAnalyze}
-          onAutoSubmit={runPrediction}
-          autoSubmit={autoSubmit}
-          onAutoSubmitConsumed={consumeAutoSubmit}
           onClear={handleClear}
           loading={loading}
           error={error}
           invalid={invalid}
           result={result}
           backendUp={backendUp}
+          homeInitiated={homeAnalysisResult}
         />
       )}
       {page === 'history' && <History backendUp={backendUp} refreshKey={historyKey} />}
