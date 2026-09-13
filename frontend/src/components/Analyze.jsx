@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import Icon from './Icon.jsx'
 import JobInput from './JobInput.jsx'
 import ResultCard from './ResultCard.jsx'
@@ -7,6 +8,9 @@ export default function Analyze({
   value,
   onChange,
   onAnalyze,
+  onAutoSubmit,
+  autoSubmit,
+  onAutoSubmitConsumed,
   onClear,
   loading,
   error,
@@ -14,6 +18,20 @@ export default function Analyze({
   result,
   backendUp,
 }) {
+  const consumedAutoSubmitId = useRef(null)
+
+  useEffect(() => {
+    if (!autoSubmit?.jobText || consumedAutoSubmitId.current === autoSubmit.id) return
+
+    // Analyze owns the route-entry handoff. Mark it consumed before calling the
+    // request so re-renders, StrictMode and the state-clearing update cannot
+    // submit the same Home payload a second time.
+    consumedAutoSubmitId.current = autoSubmit.id
+    const { id, jobText, title } = autoSubmit
+    onAutoSubmitConsumed?.(id)
+    onAutoSubmit?.(jobText, title)
+  }, [autoSubmit, onAutoSubmit, onAutoSubmitConsumed])
+
   return (
     <main className="page-shell analyze-page">
       <div className="container-narrow">

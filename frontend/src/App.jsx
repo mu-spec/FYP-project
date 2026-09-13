@@ -25,14 +25,10 @@ export default function App() {
   const [error, setError] = useState(null)
   const [invalid, setInvalid] = useState(null)
   const [historyKey, setHistoryKey] = useState(0)
-  const [pendingAnalysis, setPendingAnalysis] = useState(null)
+  const [autoSubmit, setAutoSubmit] = useState(null)
 
-  // Refs make the one-time navigation intent safe against React StrictMode,
-  // rapid clicks, and the render that occurs between navigation and the effect.
-  const nextAnalysisId = useRef(0)
-  const consumedAnalysisId = useRef(null)
-  const pendingHomeIntent = useRef(false)
-  const analysisInFlight = useRef(false)
+  const nextAutoSubmitId = useRef(0)
+  const autoSubmitInFlight = useRef(false)
 
   useEffect(() => {
     const handleHashChange = () => setPage(initialPage())
@@ -45,22 +41,18 @@ export default function App() {
 
   function navigate(nextPage) {
     const next = PAGES.has(nextPage) ? nextPage : 'home'
-    // A navigation away from Analyze must not leave a stale Home intent that
-    // could submit later after an unrelated navigation.
-    if (next !== 'analyze') {
-      setPendingAnalysis(null)
-      pendingHomeIntent.current = false
-    }
+    // A pending Home handoff is meaningful only for the immediate Analyze
+    // navigation. Discard it if the user chooses another page first.
+    if (next !== 'analyze') setAutoSubmit(null)
     setPage(next)
     window.history.replaceState(null, '', `#${next}`)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   async function runPrediction(jobText, title) {
-    // Both Home auto-submit and the direct Analyze button use this guard, so
-    // only one request can be active even during a rapid double-click.
-    if (analysisInFlight.current) return
-    analysisInFlight.current = true
+    // This is the single request gate for both automatic and manual submits.
+    if (autoSubmitInFlight.current) return
+    autoSubmitInFlight.current = true
     setLoading(true)
     setError(null)
     setInvalid(null)
@@ -73,18 +65,19 @@ export default function App() {
       if (err.invalid) setInvalid(err.message || null)
       else setError(err.message || 'The analysis service is unavailable.')
     } finally {
-      analysisInFlight.current = false
+      autoSubmitInFlight.current = false
       setLoading(false)
     }
   }
 
   function handleHomeAnalyze(jobText, title) {
-    if (analysisInFlight.current || pendingHomeIntent.current) return
-    pendingHomeIntent.current = true
-    const id = nextAnalysisId.current + 1
-    nextAnalysisId.current = id
+    if (autoSubmitInFlight.current || autoSubmit) return
+    const id = nextAutoSubmitId.current + 1
+    nextAutoSubmitId.current = id
+    // The intent is held in memory only. It is not encoded in the URL, so a
+    // browser refresh on #analyze cannot replay it.
     setDraft(jobText)
-    setPendingAnalysis({ id, jobText, title })
+    setAutoSubmit({ id, jobText, title })
     navigate('analyze')
   }
 
@@ -92,24 +85,12 @@ export default function App() {
     runPrediction(jobText, title)
   }
 
-  useEffect(() => {
-    if (page !== 'analyze' || !pendingAnalysis) return
-    if (consumedAnalysisId.current === pendingAnalysis.id) return
-
-    // Consume before starting the request. If the component re-renders or
-    // StrictMode repeats the effect, the same navigation intent cannot submit
-    // again. Refreshing the browser also cannot replay it because this state
-    // is intentionally not persisted in the URL or local storage.
-    consumedAnalysisId.current = pendingAnalysis.id
-    pendingHomeIntent.current = false
-    const { jobText, title } = pendingAnalysis
-    setPendingAnalysis(null)
-    runPrediction(jobText, title)
-  }, [page, pendingAnalysis])
+  function consumeAutoSubmit(id) {
+    setAutoSubmit((current) => (current?.id === id ? null : current))
+  }
 
   function handleClear() {
-    setPendingAnalysis(null)
-    pendingHomeIntent.current = false
+    setAutoSubmit(null)
     setDraft('')
     setResult(null)
     setError(null)
@@ -134,6 +115,9 @@ export default function App() {
           value={draft}
           onChange={setDraft}
           onAnalyze={handleManualAnalyze}
+          onAutoSubmit={runPrediction}
+          autoSubmit={autoSubmit}
+          onAutoSubmitConsumed={consumeAutoSubmit}
           onClear={handleClear}
           loading={loading}
           error={error}
