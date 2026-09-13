@@ -60,8 +60,9 @@ export default function JobInput({
       <div className="input-actions">
         <button
           type="button"
-          className="btn btn-primary btn-analyze"
+          className={`btn btn-primary btn-analyze ${loading ? 'is-loading' : ''}`}
           disabled={loading || !hasText || tooLong}
+          aria-busy={loading}
           onClick={handleAnalyze}
         >
           <Icon name="search" size={18} />
