@@ -30,9 +30,11 @@ export default function App() {
   // This ref is shared by Home and the manual Analyze form. It is the final
   // request gate, so a rapid double-click cannot create a second prediction.
   const analysisInFlight = useRef(false)
+  const navigationVersion = useRef(0)
 
   useEffect(() => {
     const handleLocationChange = () => {
+      navigationVersion.current += 1
       // Browser Back/Forward changes the URL without going through navigate().
       // Treat it as manual route entry and discard result-only source state;
       // refreshing or returning to #analyze must never replay an analysis.
@@ -57,6 +59,7 @@ export default function App() {
   function navigate(nextPage, { preserveResult = false } = {}) {
     const next = PAGES.has(nextPage) ? nextPage : 'home'
     const current = initialPage()
+    navigationVersion.current += 1
 
     if (!preserveResult) {
       setHomeAnalysisResult(false)
@@ -75,12 +78,17 @@ export default function App() {
   async function runPrediction(jobText, title, { fromHome = false } = {}) {
     if (analysisInFlight.current) return false
     analysisInFlight.current = true
+    const requestNavigationVersion = navigationVersion.current
     setLoading(true)
     setError(null)
     setInvalid(null)
     setResult(null)
     try {
       const data = await analyzeJob(jobText, title)
+      // A Back/Forward event or app navigation while the request was pending
+      // invalidates its UI destination. The backend may still store the valid
+      // prediction, but it must not overwrite the page the user chose.
+      if (navigationVersion.current !== requestNavigationVersion) return false
       setResult(data)
       setHistoryKey((key) => key + 1)
       if (fromHome) {
@@ -91,6 +99,7 @@ export default function App() {
       }
       return true
     } catch (err) {
+      if (navigationVersion.current !== requestNavigationVersion) return false
       if (err.invalid) setInvalid(err.message || null)
       else setError(err.message || 'The analysis service is unavailable.')
       // Invalid/network failures stay on Home when Home initiated the request.

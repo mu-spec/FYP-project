@@ -141,6 +141,31 @@ class ApiBehaviourTests(unittest.TestCase):
                 self.assertTrue(body["invalid_input"])
                 self.assertEqual(body["error"], REJECT_MESSAGE)
 
+    def test_non_object_json_returns_400_without_history_row(self):
+        before_ids = [row["id"] for row in self.client.get("/api/history").get_json()]
+        malformed_payloads = [
+            ["not an object"],
+            "not an object",
+            123,
+            True,
+            {"job_text": 123},
+            {"job_text": ["not text"]},
+            {"job_text": {"not": "text"}},
+        ]
+        for payload in malformed_payloads:
+            with self.subTest(payload=payload):
+                response = self.client.post(
+                    "/api/predict",
+                    data=json.dumps(payload),
+                    content_type="application/json",
+                )
+                self.assertEqual(response.status_code, 400)
+                body = response.get_json()
+                self.assertTrue(body["invalid_input"])
+                self.assertEqual(body["error"], REJECT_MESSAGE)
+        after_ids = [row["id"] for row in self.client.get("/api/history").get_json()]
+        self.assertEqual(after_ids, before_ids)
+
     @mock.patch("app.predict_one")
     def test_ml_pipeline_never_called_for_invalid(self, predict_mock):
         predict_mock.return_value = {"ignored": True}

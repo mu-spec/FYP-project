@@ -161,8 +161,15 @@ def predict():
         return jsonify({"error": "Model not trained. Run models/train_model.py first."}), 503
 
     data = request.get_json(silent=True) or {}
-    job_text = (data.get("job_text") or "").strip()
-    title    = (data.get("title") or "Untitled job").strip()[:200]
+    # A valid request body must be a JSON object. Treat other JSON values like
+    # an empty malformed submission so the existing validation response is
+    # returned instead of raising AttributeError and producing HTTP 500.
+    if not isinstance(data, dict):
+        data = {}
+    raw_job_text = data.get("job_text")
+    job_text = raw_job_text.strip() if isinstance(raw_job_text, str) else ""
+    raw_title = data.get("title")
+    title = raw_title.strip()[:200] if isinstance(raw_title, str) else "Untitled job"
 
     # ---- Job-Post Input Validation (application-level gate) -----------------
     # Runs BEFORE preprocessing / feature extraction / XGBoost. Rejected input

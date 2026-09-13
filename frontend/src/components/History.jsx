@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { clearHistory, getHistory } from '../api.js'
 import Icon from './Icon.jsx'
 
-const fmtPct = (value) => `${Math.min(Number(value || 0) * 100, 99.99).toFixed(2)}%`
+const fmtPct = (value) => `${(Math.max(0, Math.min(1, Number(value) || 0)) * 100).toFixed(2)}%`
 
 function formatDate(value) {
   const date = new Date(value)
@@ -95,7 +95,7 @@ export default function History({ backendUp, refreshKey }) {
               </table>
             </div>
           )}
-          <p className="history-note"><Icon name="info" size={14} /> History stores the job title, verdict, confidence and timestamp from each valid prediction.</p>
+          <p className="history-note"><Icon name="info" size={14} /> History stores the job title, verdict, confidence, timestamp and evidence map from each valid prediction.</p>
         </section>
       </div>
 
@@ -105,7 +105,29 @@ export default function History({ backendUp, refreshKey }) {
             <div className="modal-header"><div><span className="section-label">Saved prediction #{selected.id}</span><h2 id="history-detail-title">Analysis details</h2></div><button className="icon-button" type="button" onClick={() => setSelected(null)} aria-label="Close details"><Icon name="close" size={19} /></button></div>
             <div className="modal-verdict-row"><span className={`verdict-pill ${selected.prediction === 'Scam' ? 'scam-pill' : 'legit-pill'}`}><span className="verdict-dot" />{selected.prediction}</span><strong>{fmtPct(selected.confidence)} confidence</strong></div>
             <dl className="detail-list"><div><dt>Job title</dt><dd>{selected.job_title || 'Untitled job'}</dd></div><div><dt>Analyzed</dt><dd>{formatDate(selected.created_at)}</dd></div><div><dt>Record ID</dt><dd>#{selected.id}</dd></div></dl>
-            <p className="modal-note"><Icon name="info" size={15} /> The current SQLite history schema stores summary fields only; the original job text and red-flag list are not persisted.</p>
+            <div className="saved-evidence">
+              <span className="section-label">Saved evidence map</span>
+              {Array.isArray(selected.evidence) && selected.evidence.length > 0 ? (
+                <ul className="saved-evidence-list">
+                  {selected.evidence.map((flag, index) => (
+                    <li className="saved-evidence-item" key={`${flag.category || flag.message || 'signal'}-${index}`}>
+                      <div className="saved-evidence-item-top">
+                        <strong>{flag.category || flag.message || 'Detected signal'}</strong>
+                        <span>{flag.severity || 'Signal'}</span>
+                      </div>
+                      {Array.isArray(flag.evidence) && flag.evidence.length > 0 && (
+                        <div className="saved-evidence-snippets">
+                          {flag.evidence.map((snippet, snippetIndex) => <span key={`${snippet}-${snippetIndex}`}>“{snippet}”</span>)}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="saved-evidence-empty">No red flags were stored for this analysis.</p>
+              )}
+            </div>
+            <p className="modal-note"><Icon name="info" size={15} /> The current SQLite history schema stores summary fields, the timestamp and the evidence map; the original job text is not persisted.</p>
           </section>
         </div>
       )}
