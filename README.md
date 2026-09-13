@@ -150,6 +150,7 @@ round numbers).
 Method	Endpoint	Description
 GET	/api/health	service + model status & metrics
 POST	/api/predict	{job_text, title} → prediction, confidence, probabilities, engine breakdown, red_flags, signals, latency
+POST	/api/predict-url	{url} → SSRF-protected fetch of a PUBLIC job posting page, text extraction, then the same validation → prediction → history path as /api/predict
 GET	/api/history	prediction history with persisted evidence map (PRD 5.7; full job text is not stored)
 DELETE	/api/history	clear history
 📊 Evaluation (PRD §10)
@@ -160,3 +161,18 @@ Prediction latency ≈ 2–3 ms (PRD NFR: < 2 s), model warmed at startup.
 🧰 Stack (PRD §11)
 React.js · Flask · XGBoost · scikit-learn (TF-IDF) · NLTK · pandas/NumPy ·
 Matplotlib · Joblib · SQLite
+
+🔗 Job URL analysis (Milestone 7B)
+The Home card now offers two input modes: Paste Text (existing flow) and
+Job URL. A submitted public http(s) link is fetched by backend/url_fetcher.py
+with hard SSRF protection — scheme allow-list (http/https only), localhost/
+*.local/*.internal host rejection, DNS resolution checked so every resolved
+address (IPv4 + IPv6, incl. IPv4-mapped) must be globally routable, every
+redirect hop re-validated before it is followed (max 5), 6 s connect /
+12 s read timeouts, 2 MB response cap, HTML-only content-type check, and TLS
+verification never disabled. Readable text is extracted with the stdlib HTML
+parser (scripts/styles/nav/header/footer/cookie-banner removed, <article>/<main>
+preferred) and handed to the EXISTING validate_job_text() → predict_one() →
+history pipeline — no second classifier and no schema change. Private,
+blocked, unreachable, non-HTML or content-less pages fail gracefully and ask
+the user to paste the job description instead.

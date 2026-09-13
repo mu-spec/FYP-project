@@ -31,6 +31,15 @@ export async function analyzeJob(jobText, title = '') {
   return handle(res)
 }
 
+export async function analyzeJobUrl(url, title = '') {
+  const res = await fetch(`${BASE}/predict-url`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, title }),
+  })
+  return handle(res)
+}
+
 export async function getHistory(limit = 50) {
   const res = await fetch(`${BASE}/history?limit=${limit}`)
   return handle(res)

@@ -11,6 +11,10 @@ POST   /api/predict   -> {job_text, title} -> prediction, confidence,
                           extracted signals
                           (returns invalid_input=true 400 when the text is
                            rejected by the pre-ML job-post validator)
+POST   /api/predict-url -> {url} -> fetches the PUBLIC page (SSRF-protected,
+                          see url_fetcher.py), extracts the job text, then
+                          runs the SAME validation -> predict_one() ->
+                          history path as /api/predict. No second classifier.
 GET    /api/history   -> last N predictions (PRD 5.7)
 DELETE /api/history   -> clear prediction history
 
@@ -34,6 +38,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from nlp_pipeline import (NUMERIC_FEATURES, clean_text, detect_red_flags,
                           extract_signals, rule_score)
 from input_validation import REJECT_MESSAGE, validate_job_text
+import url_fetcher
+from url_fetcher import UrlFetchError, analyze_url
 
 # ------------------------------------------------------------------- Config
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
@@ -143,6 +149,19 @@ def predict_one(job_text: str, title: str) -> dict:
     return result
 
 # ------------------------------------------------------------------- Routes
+def _store_history(result: dict) -> None:
+    """PRD 5.7 — store a completed prediction in history (unchanged schema)."""
+    db = get_db()
+    db.execute(
+        "INSERT INTO predictions "
+        "(job_title, prediction, confidence, created_at, evidence_json) "
+        "VALUES (?,?,?,?,?)",
+        (result["job_title"], result["prediction"], result["confidence"],
+         datetime.now(timezone.utc).isoformat(),
+         json.dumps(result.get("red_flags", []), ensure_ascii=False)),
+    )
+    db.commit()
+
 @app.get("/api/health")
 def health():
     return jsonify({
@@ -187,20 +206,67 @@ def predict():
         return jsonify({"error": "Job description too long (max 50,000 chars)."}), 400
 
     result = predict_one(job_text, title)
-
-    # PRD 5.7 — store prediction history
-    db = get_db()
-    db.execute(
-        "INSERT INTO predictions "
-        "(job_title, prediction, confidence, created_at, evidence_json) "
-        "VALUES (?,?,?,?,?)",
-        (result["job_title"], result["prediction"], result["confidence"],
-         datetime.now(timezone.utc).isoformat(),
-         json.dumps(result.get("red_flags", []), ensure_ascii=False)),
-    )
-    db.commit()
+    _store_history(result)
 
     return jsonify(result)
+
+
+@app.post("/api/predict-url")
+def predict_url():
+    """Milestone 7B — analyze a public job-posting URL.
+
+    Architecture (no second prediction system):
+        URL -> url_fetcher.analyze_url (SSRF-validated fetch + text extraction)
+            -> existing validate_job_text()
+            -> existing predict_one()  (XGBoost + hybrid engine, untouched)
+            -> existing history insert (unchanged SQLite schema)
+    """
+    if model is None:
+        return jsonify({"error": "Model not trained. Run models/train_model.py first."}), 503
+
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        data = {}
+    raw_url = data.get("url")
+    url = raw_url.strip() if isinstance(raw_url, str) else ""
+    if not url:
+        return jsonify({"error": "Please paste a job posting URL.", "url_error": "invalid_url"}), 400
+
+    raw_title = data.get("title")
+    title = raw_title.strip()[:200] if isinstance(raw_title, str) else ""
+
+    # ---- SSRF-protected fetch + readable text extraction -------------------
+    try:
+        page = analyze_url(url)
+    except UrlFetchError as exc:
+        # Nothing was fetched for blocked/private URLs (rejected pre-flight),
+        # and no prediction/history ever runs for URL failures.
+        return jsonify({"error": exc.message, "url_error": exc.kind}), 400
+
+    job_text = page["text"].strip()
+
+    # ---- the SAME job-post validation gate as text mode --------------------
+    is_valid, reason = validate_job_text(job_text)
+    if not is_valid:
+        return jsonify({
+            "invalid_input": True,
+            "error": REJECT_MESSAGE,
+            "reason": reason,
+            "url_error": "not_job_like",
+        }), 400
+
+    if len(job_text) > 50_000:
+        return jsonify({"error": "Extracted job description too long (max 50,000 chars)."}), 400
+
+    # Fall back to the page <title> / host for the history record title.
+    if not title:
+        title = (page["title"] or "").strip()[:200] or "Job posting from URL"
+
+    result = predict_one(job_text, title)
+    _store_history(result)
+
+    return jsonify(result)
+
 
 @app.get("/api/history")
 def history():

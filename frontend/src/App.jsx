@@ -6,7 +6,7 @@ import Analyze from './components/Analyze.jsx'
 import History from './components/History.jsx'
 import Insights from './components/Insights.jsx'
 import About from './components/About.jsx'
-import { analyzeJob, checkHealth } from './api.js'
+import { analyzeJob, analyzeJobUrl, checkHealth } from './api.js'
 
 const PAGES = new Set(['home', 'analyze', 'history', 'insights', 'about'])
 
@@ -116,6 +116,40 @@ export default function App() {
     runPrediction(jobText, title, { fromHome: true })
   }
 
+  // Milestone 7B — URL analysis. Shares the in-flight gate and navigation
+  // version with the text flow, so a double-click cannot create a second
+  // prediction and a pending request can never overwrite a chosen page.
+  // The backend fetches/extracts the text, then runs the SAME validation and
+  // predict_one() pipeline; the response shape is identical to /api/predict.
+  async function runUrlPrediction(url) {
+    if (analysisInFlight.current) return false
+    analysisInFlight.current = true
+    const requestNavigationVersion = navigationVersion.current
+    setLoading(true)
+    setError(null)
+    setInvalid(null)
+    setResult(null)
+    try {
+      const data = await analyzeJobUrl(url)
+      // A Back/Forward event or app navigation while the request was pending
+      // invalidates its UI destination (same rule as the text flow).
+      if (navigationVersion.current !== requestNavigationVersion) return false
+      setResult(data)
+      setHistoryKey((key) => key + 1)
+      setHomeAnalysisResult(true)
+      navigate('analyze', { preserveResult: true })
+      return true
+    } catch (err) {
+      if (navigationVersion.current !== requestNavigationVersion) return false
+      if (err.invalid) setInvalid(err.message || null)
+      else setError(err.message || 'The analysis service is unavailable.')
+      return false
+    } finally {
+      analysisInFlight.current = false
+      setLoading(false)
+    }
+  }
+
   function handleManualAnalyze(jobText, title) {
     setHomeAnalysisResult(false)
     runPrediction(jobText, title)
@@ -138,6 +172,7 @@ export default function App() {
           onChange={setDraft}
           onAnalyze={handleHomeAnalyze}
           onClear={handleClear}
+          onAnalyzeUrl={runUrlPrediction}
           loading={loading}
           invalid={invalid}
           error={error}

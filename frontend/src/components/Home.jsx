@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import Icon from './Icon.jsx'
 import InvalidResult from './InvalidResult.jsx'
 import JobInput from './JobInput.jsx'
+import JobUrlInput from './JobUrlInput.jsx'
 
 const VALUE_POINTS = [
   {
@@ -33,7 +35,17 @@ const SCAM_WARNINGS = [
   ['Off-platform requests', 'Personal email, messaging apps or payment links can hide the real employer.'],
 ]
 
-export default function Home({ value, onChange, onAnalyze, onClear, loading, invalid, error, backendUp, onNavigate }) {
+export default function Home({ value, onChange, onAnalyze, onClear, onAnalyzeUrl, loading, invalid, error, backendUp, onNavigate }) {
+  // Milestone 7B — input-mode tabs. The Paste Text flow keeps its existing
+  // behaviour exactly: paste -> Analyze once -> loading -> direct result.
+  const [inputMode, setInputMode] = useState('text')
+  const [urlValue, setUrlValue] = useState('')
+
+  function handleUrlClear() {
+    setUrlValue('')
+    onClear?.()
+  }
+
   return (
     <main className="home-page">
       <div className="container-wide">
@@ -60,15 +72,47 @@ export default function Home({ value, onChange, onAnalyze, onClear, loading, inv
               </div>
               <span className="panel-icon"><Icon name="search" size={20} /></span>
             </div>
-            <JobInput
-              value={value}
-              onChange={onChange}
-              onAnalyze={onAnalyze}
-              onClear={onClear}
-              loading={loading}
-              variant="home"
-              showSample
-            />
+
+            <div className="mode-tabs" role="tablist" aria-label="Job input mode">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={inputMode === 'text'}
+                className={`mode-tab ${inputMode === 'text' ? 'active' : ''}`}
+                onClick={() => setInputMode('text')}
+              >
+                <Icon name="file" size={15} /> Paste Text
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={inputMode === 'url'}
+                className={`mode-tab ${inputMode === 'url' ? 'active' : ''}`}
+                onClick={() => setInputMode('url')}
+              >
+                <Icon name="link" size={15} /> Job URL
+              </button>
+            </div>
+
+            {inputMode === 'text' ? (
+              <JobInput
+                value={value}
+                onChange={onChange}
+                onAnalyze={onAnalyze}
+                onClear={onClear}
+                loading={loading}
+                variant="home"
+                showSample
+              />
+            ) : (
+              <JobUrlInput
+                value={urlValue}
+                onChange={setUrlValue}
+                onAnalyze={onAnalyzeUrl}
+                onClear={handleUrlClear}
+                loading={loading}
+              />
+            )}
           </div>
         </section>
 
