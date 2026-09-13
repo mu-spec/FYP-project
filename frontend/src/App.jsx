@@ -32,22 +32,43 @@ export default function App() {
   const analysisInFlight = useRef(false)
 
   useEffect(() => {
-    const handleHashChange = () => setPage(initialPage())
-    window.addEventListener('hashchange', handleHashChange)
+    const handleLocationChange = () => {
+      // Browser Back/Forward changes the URL without going through navigate().
+      // Treat it as manual route entry and discard result-only source state;
+      // refreshing or returning to #analyze must never replay an analysis.
+      setPage(initialPage())
+      setHomeAnalysisResult(false)
+      setResult(null)
+      setError(null)
+      setInvalid(null)
+    }
+
+    window.addEventListener('hashchange', handleLocationChange)
+    window.addEventListener('popstate', handleLocationChange)
     checkHealth()
       .then((data) => { setHealth(data); setBackendUp(true) })
       .catch(() => { setBackendUp(false); setHealth(null) })
-    return () => window.removeEventListener('hashchange', handleHashChange)
+    return () => {
+      window.removeEventListener('hashchange', handleLocationChange)
+      window.removeEventListener('popstate', handleLocationChange)
+    }
   }, [])
 
-  function navigate(nextPage) {
+  function navigate(nextPage, { preserveResult = false } = {}) {
     const next = PAGES.has(nextPage) ? nextPage : 'home'
-    // A result-only Analyze view is valid only for the current Home success.
-    // Any later navigation resets that source marker. It is not persisted, so
-    // refreshing #analyze always behaves like direct/manual navigation.
-    if (next !== 'analyze') setHomeAnalysisResult(false)
+    const current = initialPage()
+
+    if (!preserveResult) {
+      setHomeAnalysisResult(false)
+      setResult(null)
+      setError(null)
+      setInvalid(null)
+    }
+
     setPage(next)
-    window.history.replaceState(null, '', `#${next}`)
+    // pushState creates a real browser-history entry, so Back returns to the
+    // previous app page. Do not add an entry when the active page is clicked.
+    if (current !== next) window.history.pushState(null, '', `#${next}`)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -63,17 +84,16 @@ export default function App() {
       setResult(data)
       setHistoryKey((key) => key + 1)
       if (fromHome) {
-        // The request has already completed successfully. Navigate directly
-        // to the result view; Analyze will not render its manual intro/form.
+        // The request has completed successfully. Navigate directly to the
+        // result view; preserve this result while ordinary navigation clears it.
         setHomeAnalysisResult(true)
-        navigate('analyze')
+        navigate('analyze', { preserveResult: true })
       }
       return true
     } catch (err) {
       if (err.invalid) setInvalid(err.message || null)
       else setError(err.message || 'The analysis service is unavailable.')
       // Invalid/network failures stay on Home when Home initiated the request.
-      // This prevents an unnecessary route change with no result to show.
       return false
     } finally {
       analysisInFlight.current = false
