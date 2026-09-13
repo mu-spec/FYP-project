@@ -14,10 +14,10 @@ ai-job-scam-detector/
 │   │   ├── styles.css             #    dark-theme design system
 │   │   └── components/
 │   │       ├── Header.jsx         #    status pill (API/model state)
-│   │       ├── Home.jsx           #    PRD 5.1  home + Detect Scam btn
-│   │       ├── JobInput.jsx       #    PRD 5.2  job input module
-│   │       ├── ResultCard.jsx     #    PRD 5.5/5.6 results, prob graph, flags
-│   │       └── History.jsx        #    PRD 5.7  prediction history table
+│   │       ├── Home.jsx            #    PRD 5.1  home + direct one-click analysis
+│   │       ├── JobInput.jsx        #    PRD 5.2  job input module
+│   │       ├── ResultCard.jsx      #    PRD 5.5/5.6 results, risk scale, evidence
+│   │       └── History.jsx         #    PRD 5.7  history table + saved evidence
 │   └── package.json
 │
 ├── backend/                       # PHASE 2 — Flask REST API
@@ -51,8 +51,16 @@ cd models && python train_model.py
 # 2) Backend  →  http://localhost:5000
 cd backend && pip install -r requirements.txt && python app.py
 
-# 3) Frontend →  http://localhost:5173
+# 3) Frontend → http://localhost:5173
 cd frontend && npm install && npm run dev
+
+Current analysis flow
+---------------------
+Home submits a valid pasted job post once and opens the result-only Analyze
+view. The Analyze tab remains available for direct/manual submissions. Each
+valid prediction is saved with its title, verdict, confidence, timestamp and
+evidence map; the original full job description is intentionally not stored.
+
 🤖 Model (PRD §9) and the Hybrid Prediction Engine
 XGBoost classifier on TF-IDF (10k features, 1–2 grams) + 11 engineered
 scam signals (email/URL/phone counts, currency marks, salary mention,
@@ -87,7 +95,7 @@ round numbers).
 Method	Endpoint	Description
 GET	/api/health	service + model status & metrics
 POST	/api/predict	{job_text, title} → prediction, confidence, probabilities, engine breakdown, red_flags, signals, latency
-GET	/api/history	prediction history (PRD 5.7)
+GET	/api/history	prediction history with persisted evidence map (PRD 5.7; full job text is not stored)
 DELETE	/api/history	clear history
 📊 Evaluation (PRD §10)
 Accuracy · Precision · Recall · F1 · ROC-AUC · Confusion Matrix
