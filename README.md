@@ -1,6 +1,6 @@
 🛡️ AI-Based Job Scam Detection (FYP)
 Machine-learning system that classifies a pasted job advertisement as
-Scam or Legitimate, with confidence scores, a probability graph and
+Scam or Legitimate, with confidence scores, a probability scale and
 explainable red-flag indicators.
 
 📁 Project Structure (matches PRD phases)
@@ -11,7 +11,7 @@ ai-job-scam-detector/
 │   ├── src/
 │   │   ├── App.jsx                #    app shell + API wiring
 │   │   ├── api.js                 #    REST client (/api/*)
-│   │   ├── styles.css             #    dark-theme design system
+│   │   ├── styles.css             #    responsive design system
 │   │   └── components/
 │   │       ├── Header.jsx         #    status pill (API/model state)
 │   │       ├── Home.jsx            #    PRD 5.1  home + direct one-click analysis
@@ -60,6 +60,61 @@ Home submits a valid pasted job post once and opens the result-only Analyze
 view. The Analyze tab remains available for direct/manual submissions. Each
 valid prediction is saved with its title, verdict, confidence, timestamp and
 evidence map; the original full job description is intentionally not stored.
+
+🧾 Technical summary
+--------------------
+The React/Vite frontend provides Home, direct/manual Analyze, Result, History,
+Insights and About screens. The Python/Flask backend validates job-shaped text,
+combines the existing XGBoost classifier's TF-IDF output with the existing
+numeric signals and deterministic red-flag evidence, and stores valid result
+summaries plus evidence in SQLite. No training or prediction occurs for
+rejected input.
+
+🎬 Final FYP demo examples
+--------------------------
+These examples are documentation-only. Paste each one exactly as shown; they
+are not hard-coded into the application and do not change the model.
+
+DEMO 1 — Clear scam
+Earn $9,000 EVERY WEEK working from home! No experience needed. Immediate hiring! Just pay a $99 registration fee via Easypaisa. Email hiring.manager2024@gmail.com NOW. Act fast!
+Expected current result: Scam; scam probability 98.09%; confidence 98.09%; four flags: FREE WEBMAIL, UPFRONT PAYMENT, URGENCY PRESSURE and EXCESSIVE PUNCTUATION.
+
+DEMO 2 — Clear legitimate
+We are hiring a backend engineer to join our product team. You will design APIs, review code, collaborate with designers, and improve application reliability. The role includes a clear development plan, paid leave, and access to health coverage. Candidates should share a portfolio and describe relevant projects.
+Expected current result: Legitimate; scam probability 0.07%; confidence 99.93%; no red flags.
+
+DEMO 3 — Borderline / educational
+Customer Support Agent needed! Apply now! Join our company team and help customers!!! Requirements: communication skills, training provided, paid salary.
+Expected current result: Legitimate; scam probability 38.30%; confidence 61.70%; one flag: EXCESSIVE PUNCTUATION.
+
+🖥️ Exact live-demo procedure
+-----------------------------
+Use two terminals from the project root:
+
+Terminal 1 — backend:
+cd backend && python3 app.py
+
+Terminal 2 — frontend:
+cd frontend && npm install && npm run dev -- --host 0.0.0.0
+
+Then open http://localhost:5173 and:
+1. Open Home.
+2. Paste DEMO 1 and click Analyze once.
+3. Explain the Scam classification, probability and confidence.
+4. Show the red flags and Evidence Map snippets.
+5. Open History and show the saved result/evidence.
+6. Return to Home or Analyze.
+7. Paste DEMO 2 in the manual Analyze flow and compare the Legitimate result.
+8. Use DEMO 3 only if a borderline/educational contrast is useful.
+
+🧯 Demo recovery
+----------------
+- Backend not running: start Terminal 1 and refresh the browser.
+- Port already in use: press Ctrl+C in the terminal that owns the prior demo process; do not stop an unknown process.
+- Frontend cannot reach backend: confirm http://localhost:5000/api/health returns status ok, then restart the frontend from the frontend directory.
+- Model fails to load: read the backend terminal error and verify the existing files under models/artifacts; do not retrain during the presentation.
+- Browser needs refreshing: refresh the page. A refreshed Analyze route is intentionally manual, so paste the job again if needed.
+- Old History records: use the visible Clear history action before the demo, then confirm the empty-history state.
 
 🤖 Model (PRD §9) and the Hybrid Prediction Engine
 XGBoost classifier on TF-IDF (10k features, 1–2 grams) + 11 engineered
