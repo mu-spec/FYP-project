@@ -250,7 +250,7 @@ export default function App() {
         />
       )}
       {page === 'history' && <History backendUp={backendUp} refreshKey={historyKey} />}
-      {page === 'insights' && <Insights />}
+      {page === 'insights' && <Insights backendUp={backendUp} onNavigate={navigate} />}
       {page === 'about' && <About />}
       <Footer onNavigate={navigate} />
     </div>

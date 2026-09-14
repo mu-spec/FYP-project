@@ -22,7 +22,7 @@ export default function Analyze({
 
   return (
     <main className="page-shell analyze-page">
-      <div className="container-narrow">
+      <div className="container-wide">
         {showManualWorkspace && (
           <>
             <div className="page-intro">
