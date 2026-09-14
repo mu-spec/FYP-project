@@ -1,3 +1,7 @@
 node_modules/
 dist/
 .env
+
+# Milestone 7C — vendored OCR assets (restored by npm install / npm run prepare-ocr)
+public/tesseract/
+public/tessdata/

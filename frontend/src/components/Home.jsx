@@ -1,8 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Icon from './Icon.jsx'
 import InvalidResult from './InvalidResult.jsx'
 import JobInput from './JobInput.jsx'
 import JobUrlInput from './JobUrlInput.jsx'
+import JobImageInput from './JobImageInput.jsx'
+import {
+  validateImageFile,
+  IMAGE_CORRUPT_MESSAGE,
+} from '../lib/ocrText.js'
 
 const VALUE_POINTS = [
   {
@@ -35,14 +40,51 @@ const SCAM_WARNINGS = [
   ['Off-platform requests', 'Personal email, messaging apps or payment links can hide the real employer.'],
 ]
 
-export default function Home({ value, onChange, onAnalyze, onClear, onAnalyzeUrl, loading, invalid, error, backendUp, onNavigate }) {
-  // Milestone 7B — input-mode tabs. The Paste Text flow keeps its existing
+export default function Home({ value, onChange, onAnalyze, onClear, onAnalyzeUrl, onAnalyzeImage, loading, ocr, invalid, error, backendUp, onNavigate }) {
+  // Milestone 7B/7C — input-mode tabs. The Paste Text flow keeps its existing
   // behaviour exactly: paste -> Analyze once -> loading -> direct result.
   const [inputMode, setInputMode] = useState('text')
   const [urlValue, setUrlValue] = useState('')
+  const [imageFile, setImageFile] = useState(null)
+  const [imagePreview, setImagePreview] = useState('')
+  const [uploadError, setUploadError] = useState(null)
+  const busy = Boolean(loading || ocr)
+
+  // Preview object-URL lifecycle for the selected screenshot.
+  useEffect(() => {
+    if (!imageFile) {
+      setImagePreview('')
+      return undefined
+    }
+    const url = URL.createObjectURL(imageFile)
+    setImagePreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [imageFile])
 
   function handleUrlClear() {
     setUrlValue('')
+    onClear?.()
+  }
+
+  function handleSelectImage(file) {
+    const check = validateImageFile(file)
+    if (!check.ok) {
+      setUploadError(check.message)
+      return
+    }
+    setUploadError(null)
+    setImageFile(file)
+  }
+
+  function handleImagePreviewError() {
+    // The selected file could not be decoded as an image (corrupt file).
+    setImageFile(null)
+    setUploadError(IMAGE_CORRUPT_MESSAGE)
+  }
+
+  function handleImageRemove() {
+    setImageFile(null)
+    setUploadError(null)
     onClear?.()
   }
 
@@ -79,6 +121,7 @@ export default function Home({ value, onChange, onAnalyze, onClear, onAnalyzeUrl
                 role="tab"
                 aria-selected={inputMode === 'text'}
                 className={`mode-tab ${inputMode === 'text' ? 'active' : ''}`}
+                disabled={busy}
                 onClick={() => setInputMode('text')}
               >
                 <Icon name="file" size={15} /> Paste Text
@@ -88,13 +131,24 @@ export default function Home({ value, onChange, onAnalyze, onClear, onAnalyzeUrl
                 role="tab"
                 aria-selected={inputMode === 'url'}
                 className={`mode-tab ${inputMode === 'url' ? 'active' : ''}`}
+                disabled={busy}
                 onClick={() => setInputMode('url')}
               >
                 <Icon name="link" size={15} /> Job URL
               </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={inputMode === 'image'}
+                className={`mode-tab ${inputMode === 'image' ? 'active' : ''}`}
+                disabled={busy}
+                onClick={() => setInputMode('image')}
+              >
+                <Icon name="image" size={15} /> Upload Screenshot
+              </button>
             </div>
 
-            {inputMode === 'text' ? (
+            {inputMode === 'text' && (
               <JobInput
                 value={value}
                 onChange={onChange}
@@ -104,13 +158,27 @@ export default function Home({ value, onChange, onAnalyze, onClear, onAnalyzeUrl
                 variant="home"
                 showSample
               />
-            ) : (
+            )}
+            {inputMode === 'url' && (
               <JobUrlInput
                 value={urlValue}
                 onChange={setUrlValue}
                 onAnalyze={onAnalyzeUrl}
                 onClear={handleUrlClear}
                 loading={loading}
+              />
+            )}
+            {inputMode === 'image' && (
+              <JobImageInput
+                file={imageFile}
+                preview={imagePreview}
+                busy={busy}
+                ocr={ocr}
+                uploadError={uploadError}
+                onSelect={handleSelectImage}
+                onRemove={handleImageRemove}
+                onPreviewError={handleImagePreviewError}
+                onAnalyze={onAnalyzeImage}
               />
             )}
           </div>

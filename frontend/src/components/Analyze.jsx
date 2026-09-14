@@ -14,6 +14,7 @@ export default function Analyze({
   result,
   backendUp,
   homeInitiated = false,
+  ocrInfo = null,
 }) {
   // A successful Home submission arrives here with its result already ready.
   // Keep this route result-only so the user never sees a second "Review" step.
@@ -58,6 +59,18 @@ export default function Analyze({
         )}
 
         {invalid && <InvalidResult message={invalid} />}
+        {ocrInfo && (
+          <details className="ocr-extracted card-surface">
+            <summary>
+              <Icon name="file" size={16} />
+              Extracted text
+              <span className="ocr-extracted-meta">
+                read from “{ocrInfo.fileName}” · {ocrInfo.text.length.toLocaleString()} characters sent for analysis
+              </span>
+            </summary>
+            <pre className="ocr-extracted-text">{ocrInfo.text}</pre>
+          </details>
+        )}
         {result && <ResultCard result={result} />}
       </div>
     </main>

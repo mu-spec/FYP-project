@@ -7,6 +7,14 @@ import History from './components/History.jsx'
 import Insights from './components/Insights.jsx'
 import About from './components/About.jsx'
 import { analyzeJob, analyzeJobUrl, checkHealth } from './api.js'
+import { runOcr } from './lib/ocrClient.js'
+import {
+  normalizeOcrText,
+  evaluateOcrText,
+  derivedTitleFromText,
+  OCR_TEXT_MESSAGE,
+  OCR_FAILURE_MESSAGE,
+} from './lib/ocrText.js'
 
 const PAGES = new Set(['home', 'analyze', 'history', 'insights', 'about'])
 
@@ -26,6 +34,10 @@ export default function App() {
   const [invalid, setInvalid] = useState(null)
   const [historyKey, setHistoryKey] = useState(0)
   const [homeAnalysisResult, setHomeAnalysisResult] = useState(false)
+  // Milestone 7C — OCR progress (null when idle) and transparency info for
+  // the result view ({text, fileName} set after a successful screenshot run).
+  const [ocr, setOcr] = useState(null)
+  const [ocrInfo, setOcrInfo] = useState(null)
 
   // This ref is shared by Home and the manual Analyze form. It is the final
   // request gate, so a rapid double-click cannot create a second prediction.
@@ -43,6 +55,8 @@ export default function App() {
       setResult(null)
       setError(null)
       setInvalid(null)
+      setOcrInfo(null)
+      setOcr(null)
     }
 
     window.addEventListener('hashchange', handleLocationChange)
@@ -66,6 +80,7 @@ export default function App() {
       setResult(null)
       setError(null)
       setInvalid(null)
+      setOcrInfo(null)
     }
 
     setPage(next)
@@ -73,6 +88,32 @@ export default function App() {
     // previous app page. Do not add an entry when the active page is clicked.
     if (current !== next) window.history.pushState(null, '', `#${next}`)
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  // Shared completion path for every analysis mode: runs the EXISTING
+  // /api/predict request, applies navigation-version invalidation (a Back/
+  // Forward event or navigation while pending discards the stale result),
+  // and routes Home-initiated flows to the result-only Analyze view.
+  async function executeAnalysis(request, autoNavigate, requestNavigationVersion) {
+    try {
+      const data = await request()
+      if (navigationVersion.current !== requestNavigationVersion) return false
+      setResult(data)
+      setHistoryKey((key) => key + 1)
+      if (autoNavigate) {
+        setHomeAnalysisResult(true)
+        navigate('analyze', { preserveResult: true })
+      }
+      return true
+    } catch (err) {
+      if (navigationVersion.current !== requestNavigationVersion) return false
+      if (err.invalid) setInvalid(err.message || null)
+      else setError(err.message || 'The analysis service is unavailable.')
+      return false
+    } finally {
+      analysisInFlight.current = false
+      setLoading(false)
+    }
   }
 
   async function runPrediction(jobText, title, { fromHome = false } = {}) {
@@ -83,31 +124,7 @@ export default function App() {
     setError(null)
     setInvalid(null)
     setResult(null)
-    try {
-      const data = await analyzeJob(jobText, title)
-      // A Back/Forward event or app navigation while the request was pending
-      // invalidates its UI destination. The backend may still store the valid
-      // prediction, but it must not overwrite the page the user chose.
-      if (navigationVersion.current !== requestNavigationVersion) return false
-      setResult(data)
-      setHistoryKey((key) => key + 1)
-      if (fromHome) {
-        // The request has completed successfully. Navigate directly to the
-        // result view; preserve this result while ordinary navigation clears it.
-        setHomeAnalysisResult(true)
-        navigate('analyze', { preserveResult: true })
-      }
-      return true
-    } catch (err) {
-      if (navigationVersion.current !== requestNavigationVersion) return false
-      if (err.invalid) setInvalid(err.message || null)
-      else setError(err.message || 'The analysis service is unavailable.')
-      // Invalid/network failures stay on Home when Home initiated the request.
-      return false
-    } finally {
-      analysisInFlight.current = false
-      setLoading(false)
-    }
+    return executeAnalysis(() => analyzeJob(jobText, title), fromHome, requestNavigationVersion)
   }
 
   function handleHomeAnalyze(jobText, title) {
@@ -129,24 +146,58 @@ export default function App() {
     setError(null)
     setInvalid(null)
     setResult(null)
+    // The backend fetches/extracts the text, then runs the SAME validation and
+    // predict_one() pipeline; the response shape is identical to /api/predict.
+    return executeAnalysis(() => analyzeJobUrl(url), true, requestNavigationVersion)
+  }
+
+  // Milestone 7C — screenshot analysis: OCR runs in the browser, then the
+  // extracted text goes through the SAME existing validation → predict_one()
+  // path as pasted text. One Analyze click covers OCR + prediction; the
+  // shared in-flight gate prevents double submission, and the navigation
+  // version discards OCR/prediction results if the user navigates away.
+  async function runImagePrediction(file) {
+    if (analysisInFlight.current) return false
+    analysisInFlight.current = true
+    const requestNavigationVersion = navigationVersion.current
+    setLoading(true)
+    setError(null)
+    setInvalid(null)
+    setResult(null)
     try {
-      const data = await analyzeJobUrl(url)
-      // A Back/Forward event or app navigation while the request was pending
-      // invalidates its UI destination (same rule as the text flow).
+      setOcr({ status: 'starting', progress: 0 })
+      let rawText = ''
+      try {
+        rawText = await runOcr(file, (m) => {
+          if (navigationVersion.current === requestNavigationVersion) {
+            setOcr({ status: m.status, progress: m.progress })
+          }
+        })
+      } catch (ocrErr) {
+        if (navigationVersion.current !== requestNavigationVersion) return false
+        console.error('OCR failed:', ocrErr)
+        setError(OCR_FAILURE_MESSAGE)
+        return false
+      }
+      // The user navigated away while OCR ran — discard the stale result.
       if (navigationVersion.current !== requestNavigationVersion) return false
-      setResult(data)
-      setHistoryKey((key) => key + 1)
-      setHomeAnalysisResult(true)
-      navigate('analyze', { preserveResult: true })
-      return true
-    } catch (err) {
-      if (navigationVersion.current !== requestNavigationVersion) return false
-      if (err.invalid) setInvalid(err.message || null)
-      else setError(err.message || 'The analysis service is unavailable.')
-      return false
+
+      const normalized = normalizeOcrText(rawText)
+      const gate = evaluateOcrText(normalized)
+      if (!gate.ok) {
+        // Never send empty/garbage OCR output to the classifier.
+        setError(OCR_TEXT_MESSAGE)
+        return false
+      }
+      setOcr(null)
+      const title = derivedTitleFromText(normalized)
+      const ok = await executeAnalysis(() => analyzeJob(normalized, title), true, requestNavigationVersion)
+      if (ok) setOcrInfo({ text: normalized, fileName: file.name })
+      return ok
     } finally {
       analysisInFlight.current = false
       setLoading(false)
+      setOcr(null)
     }
   }
 
@@ -161,6 +212,7 @@ export default function App() {
     setResult(null)
     setError(null)
     setInvalid(null)
+    setOcrInfo(null)
   }
 
   return (
@@ -172,6 +224,8 @@ export default function App() {
           onChange={setDraft}
           onAnalyze={handleHomeAnalyze}
           onClear={handleClear}
+          onAnalyzeImage={runImagePrediction}
+          ocr={ocr}
           onAnalyzeUrl={runUrlPrediction}
           loading={loading}
           invalid={invalid}
@@ -192,6 +246,7 @@ export default function App() {
           result={result}
           backendUp={backendUp}
           homeInitiated={homeAnalysisResult}
+          ocrInfo={ocrInfo}
         />
       )}
       {page === 'history' && <History backendUp={backendUp} refreshKey={historyKey} />}

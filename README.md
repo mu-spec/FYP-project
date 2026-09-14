@@ -162,6 +162,19 @@ Prediction latency ≈ 2–3 ms (PRD NFR: < 2 s), model warmed at startup.
 React.js · Flask · XGBoost · scikit-learn (TF-IDF) · NLTK · pandas/NumPy ·
 Matplotlib · Joblib · SQLite
 
+🖼️ Screenshot analysis (Milestone 7C)
+The Home card's third input mode, Upload Screenshot, reads a job ad from a
+PNG/JPG/JPEG/WEBP image (max 8 MB) using Tesseract.js OCR that runs entirely
+in the browser (WASM + locally vendored worker/core/eng.traineddata via
+`npm run prepare-ocr`, installed automatically on `npm install`) — no OS
+binary, no server upload of the image, no paid API. Extracted text is
+normalized (never invented), gated client-side, then pushed through the
+EXISTING validate_job_text() → predict_one() → history pipeline, so all three
+modes (Paste Text, Job URL, Upload Screenshot) share one classifier. A
+collapsible "Extracted text" panel on the result view shows exactly what the
+OCR produced. Unusable images (no text, too blurry, wrong format, oversize,
+corrupt) fail gracefully before any prediction runs.
+
 🔗 Job URL analysis (Milestone 7B)
 The Home card now offers two input modes: Paste Text (existing flow) and
 Job URL. A submitted public http(s) link is fetched by backend/url_fetcher.py
@@ -175,4 +188,6 @@ parser (scripts/styles/nav/header/footer/cookie-banner removed, <article>/<main>
 preferred) and handed to the EXISTING validate_job_text() → predict_one() →
 history pipeline — no second classifier and no schema change. Private,
 blocked, unreachable, non-HTML or content-less pages fail gracefully and ask
-the user to paste the job description instead.
+the user to paste the job description instead. Known limits: extraction is
+imperfect for JS-only job boards, bot-protected pages, paywalls and unusual
+markup — for those, Paste Text remains the reliable path.
