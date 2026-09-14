@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Icon from './Icon.jsx'
 import InvalidResult from './InvalidResult.jsx'
 import JobInput from './JobInput.jsx'
@@ -87,6 +87,15 @@ export default function Home({ value, onChange, onAnalyze, onClear, onAnalyzeUrl
     setUploadError(null)
     onClear?.()
   }
+
+  // Visual polish (7F): analysis feedback sits below the hero card, which can
+  // be below the fold — bring it into view when it appears.
+  const feedbackRef = useRef(null)
+  useEffect(() => {
+    if ((invalid || error) && feedbackRef.current) {
+      feedbackRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [invalid, error])
 
   return (
     <main className="home-page">
@@ -184,6 +193,7 @@ export default function Home({ value, onChange, onAnalyze, onClear, onAnalyzeUrl
           </div>
         </section>
 
+        <div ref={feedbackRef}>
         {error && (
           <div className="inline-alert error-alert home-feedback" role="alert">
             <Icon name="warning" size={18} />
@@ -191,6 +201,7 @@ export default function Home({ value, onChange, onAnalyze, onClear, onAnalyzeUrl
           </div>
         )}
         {invalid && <div className="home-feedback"><InvalidResult message={invalid} /></div>}
+        </div>
 
         <section className="value-grid" aria-label="Product benefits">
           {VALUE_POINTS.map((point) => (

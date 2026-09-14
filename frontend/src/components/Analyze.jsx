@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import Icon from './Icon.jsx'
 import JobInput from './JobInput.jsx'
 import ResultCard from './ResultCard.jsx'
@@ -19,6 +20,15 @@ export default function Analyze({
   // A successful Home submission arrives here with its result already ready.
   // Keep this route result-only so the user never sees a second "Review" step.
   const showManualWorkspace = !homeInitiated
+  const feedbackRef = useRef(null)
+
+  // Visual polish (7F): validation/error feedback renders below the analysis
+  // card, which can sit below the fold — bring it into view when it appears.
+  useEffect(() => {
+    if ((invalid || error) && feedbackRef.current) {
+      feedbackRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [invalid, error])
 
   return (
     <main className="page-shell analyze-page">
@@ -51,6 +61,7 @@ export default function Analyze({
           </>
         )}
 
+        <div ref={feedbackRef}>
         {error && (
           <div className="inline-alert error-alert" role="alert">
             <Icon name="warning" size={18} />
@@ -59,6 +70,7 @@ export default function Analyze({
         )}
 
         {invalid && <InvalidResult message={invalid} />}
+        </div>
         {ocrInfo && (
           <details className="ocr-extracted card-surface">
             <summary>
