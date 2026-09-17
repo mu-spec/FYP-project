@@ -223,7 +223,8 @@ authentication itself remains purely session-cookie based.
 
 🔎 Real Job Discovery (Milestone 8B.1)
 The Jobs page ("Real Job Opportunities") shows real external job postings from
-two official public APIs — Remote OK (https://remoteok.com/api) and Arbeitnow
+three official public APIs — Remote OK (https://remoteok.com/api), Arbeitnow
+(https://www.arbeitnow.com/api/job-board-api) and Jobicy (https://jobicy.com/api/v2/remote-jobs,
 (https://www.arbeitnow.com/api/job-board-api). No scraping and no API keys are
 used, and job APIs are only ever called by the Flask backend (never from
 React). Postings are normalized into a shared shape (source, source_job_id,
@@ -239,7 +240,8 @@ raw provider errors.
 GET /api/jobs (authenticated; anonymous requests get 401) accepts q, location,
 source and remote=true filters plus page-based pagination (20 per page) and
 returns normalized jobs plus cache metadata. Every card visibly names its
-source ("Source: Remote OK" / "Source: Arbeitnow") and links back to the
+source ("Source: Remote OK" / "Source: Arbeitnow" / "Source: Jobicy") and links
+back to the
 original listing (Remote OK jobs always link to their remoteok.com URL, as
 their terms require). HTML is stripped server-side; descriptions are rendered
 as plain text only. "Analyze with JobGuard" sends the listing through the
@@ -391,7 +393,7 @@ are unchanged: they still match external provider jobs only.
   caution you would with any listing (never pay fees, verify independently).
 - OCR quality depends on the screenshot; blurry images are rejected rather
   than guessed.
-- External job feeds (RemoteOK, Arbeitnow) can be temporarily unreachable —
+- External job feeds (RemoteOK, Arbeitnow, Jobicy) can be temporarily unreachable —
   the app then serves its recent cache and says so. JobGuard listings and
   external listings are stored separately.
 - Alerts are in-app only, by design (no emails are sent).
