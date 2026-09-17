@@ -31,8 +31,17 @@ _last_refresh = {"at": None, "ok": {name: None for name in PROVIDERS}}
 
 
 def _upsert_jobs(db, jobs):
-    """Insert new jobs / refresh existing ones on UNIQUE(source, source_job_id)."""
+    """Insert new jobs / refresh existing ones on UNIQUE(source, source_job_id).
+
+    Returns the rows that were genuinely NEW to the cache (with their internal
+    id attached) so the alert layer can notify only about newly imported jobs.
+    """
     import json as _json
+    db.row_factory = sqlite3.Row  # the SELECT below accesses columns by name
+    existing = {
+        (row["source"], row["source_job_id"]): row["id"]
+        for row in db.execute("SELECT id, source, source_job_id FROM external_jobs")
+    }
     rows = []
     for job in jobs:
         row = dict(job)
@@ -61,6 +70,18 @@ def _upsert_jobs(db, jobs):
         """,
         rows,
     )
+    new_jobs = []
+    for job in jobs:
+        key = (job["source"], job["source_job_id"])
+        if key not in existing:
+            row_id = db.execute(
+                "SELECT id FROM external_jobs WHERE source = ? AND source_job_id = ?",
+                key,
+            ).fetchone()
+            fresh = dict(job)
+            fresh["id"] = row_id["id"]
+            new_jobs.append(fresh)
+    return new_jobs
 
 
 def _parse_ts(text):
@@ -84,12 +105,13 @@ def refresh_if_stale(db_path):
         cache_fresh = newest_dt is not None and \
             datetime.now(timezone.utc) - newest_dt.astimezone(timezone.utc) < FRESHNESS
 
+        newly_imported = []
         if not cache_fresh:
             for name, provider in PROVIDERS.items():
                 try:
                     jobs = provider.fetch_jobs()
                     with sqlite3.connect(db_path) as db:
-                        _upsert_jobs(db, jobs)
+                        newly_imported.extend(_upsert_jobs(db, jobs))
                         cutoff = (datetime.now(timezone.utc) - PRUNE_AFTER).isoformat()
                         db.execute("DELETE FROM external_jobs WHERE fetched_at < ?", (cutoff,))
                         db.commit()
@@ -97,6 +119,18 @@ def refresh_if_stale(db_path):
                 except Exception:
                     _last_refresh["ok"][name] = False  # keep previous rows
             _last_refresh["at"] = now_iso()
+
+            # Milestone 8B.2 — after a successful (partial counts too) import,
+            # notify users whose saved preferences match the NEW jobs. Lazy
+            # import avoids a circular dependency; a failure here must never
+            # break job serving.
+            if any(_last_refresh["ok"].values()) and newly_imported:
+                try:
+                    import job_sources.alerts as alerts  # noqa: circular-safe
+                    alerts.ensure_tables(db_path)
+                    alerts.generate_for_jobs(db_path, newly_imported)
+                except Exception:
+                    pass
 
         with sqlite3.connect(db_path) as db:
             db.row_factory = sqlite3.Row

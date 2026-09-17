@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Icon from './Icon.jsx'
+import NotificationBell from './NotificationBell.jsx'
 
 const NAV_ITEMS = [
   { id: 'home', label: 'Home' },
@@ -10,7 +11,7 @@ const NAV_ITEMS = [
   { id: 'about', label: 'About' },
 ]
 
-export default function Header({ page, onNavigate, backendUp, health, user, onSignOut }) {
+export default function Header({ page, onNavigate, backendUp, health, user, onSignOut, onViewJob, onOpenPreferences }) {
   const statusLabel = backendUp === null
     ? 'Checking service'
     : backendUp
@@ -70,6 +71,15 @@ export default function Header({ page, onNavigate, backendUp, health, user, onSi
           <span className="status-dot" />
           <span>{statusLabel}</span>
         </div>
+
+        {user && (
+          <NotificationBell
+            user={user}
+            backendUp={backendUp}
+            onViewJob={onViewJob}
+            onOpenPreferences={onOpenPreferences}
+          />
+        )}
 
         {user && (
           <div className="user-menu" ref={menuRef}>

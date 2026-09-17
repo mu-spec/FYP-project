@@ -146,3 +146,48 @@ export async function getJobs({ q = '', location = '', source = '', remote = fal
   const res = await fetch(`${BASE}/jobs?${params.toString()}`, { credentials: 'include' })
   return handle(res)
 }
+
+// ---------------------------------------------------------------------------
+// Milestone 8B.2 — personalized job preferences + in-app notifications.
+// ---------------------------------------------------------------------------
+
+export async function getJobPreferences() {
+  const res = await fetch(`${BASE}/job-preferences`, { credentials: 'include' })
+  return handle(res)
+}
+
+export async function saveJobPreferences({ keywords = '', location = '', remote_only = false, source = 'any' }) {
+  const res = await fetch(`${BASE}/job-preferences`, authedOptions({
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keywords, location, remote_only, source }),
+  }))
+  return handle(res)
+}
+
+export async function getNotifications() {
+  const res = await fetch(`${BASE}/notifications`, { credentials: 'include' })
+  return handle(res)
+}
+
+export async function getUnreadCount() {
+  const res = await fetch(`${BASE}/notifications/unread-count`, { credentials: 'include' })
+  return handle(res)
+}
+
+export async function markNotificationRead(id) {
+  const res = await fetch(`${BASE}/notifications/${id}/read`, authedOptions({
+    method: 'POST',
+    credentials: 'include',
+  }))
+  return handle(res)
+}
+
+export async function markAllNotificationsRead() {
+  const res = await fetch(`${BASE}/notifications/read-all`, authedOptions({
+    method: 'POST',
+    credentials: 'include',
+  }))
+  return handle(res)
+}

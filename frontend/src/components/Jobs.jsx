@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getJobs } from '../api.js'
+import { getJobs, getJobPreferences, saveJobPreferences } from '../api.js'
 import Icon from './Icon.jsx'
 
 const SOURCE_LABELS = { remoteok: 'Remote OK', arbeitnow: 'Arbeitnow' }
@@ -26,7 +26,17 @@ function snippet(text) {
   return text.length > 220 ? `${text.slice(0, 220).trimEnd()}…` : text
 }
 
-export default function Jobs({ onAnalyzeJob, backendUp }) {
+function alertsSummary(prefs) {
+  if (!prefs) return null
+  const parts = []
+  if (prefs.keywords) parts.push(prefs.keywords)
+  if (prefs.remote_only) parts.push('Remote')
+  if (prefs.location) parts.push(prefs.location)
+  if (prefs.source && prefs.source !== 'any') parts.push(SOURCE_LABELS[prefs.source] || prefs.source)
+  return parts.length ? `Alerts: ${parts.join(' · ')}` : null
+}
+
+export default function Jobs({ onAnalyzeJob, backendUp, focusJob, onClearFocus }) {
   const [filters, setFilters] = useState({ q: '', location: '', source: '', remote: false })
   const [applied, setApplied] = useState(filters)
   const [data, setData] = useState(null)
@@ -34,6 +44,13 @@ export default function Jobs({ onAnalyzeJob, backendUp }) {
   const [error, setError] = useState('')
   const [analyzingId, setAnalyzingId] = useState(null)
   const [analysisNote, setAnalysisNote] = useState('')
+  // Milestone 8B.2 — job preferences + notification hand-off
+  const [prefs, setPrefs] = useState(null)
+  const [prefsOpen, setPrefsOpen] = useState(false)
+  const [prefsDraft, setPrefsDraft] = useState({ keywords: '', location: '', remote_only: false, source: 'any' })
+  const [prefsSaving, setPrefsSaving] = useState(false)
+  const [prefsError, setPrefsError] = useState('')
+  const [detailJob, setDetailJob] = useState(null)
   const debounceRef = useRef(null)
   const requestRef = useRef(0)
 
@@ -66,6 +83,52 @@ export default function Jobs({ onAnalyzeJob, backendUp }) {
     load(applied, 1)
   }, [applied, load])
 
+  // Milestone 8B.2 — load the saved preferences once for the summary chip.
+  useEffect(() => {
+    getJobPreferences()
+      .then((res) => {
+        setPrefs(res.preferences)
+        if (res.preferences) {
+          setPrefsDraft({
+            keywords: res.preferences.keywords || '',
+            location: res.preferences.location || '',
+            remote_only: !!res.preferences.remote_only,
+            source: res.preferences.source || 'any',
+          })
+        }
+      })
+      .catch(() => {/* the page itself still works without preferences */})
+  }, [])
+
+  // A notification's "View Job" hands over a job — open its detail view.
+  useEffect(() => {
+    if (focusJob) {
+      setDetailJob(focusJob)
+      onClearFocus?.()
+    }
+  }, [focusJob, onClearFocus])
+
+  const openPrefs = () => {
+    setPrefsError('')
+    setPrefsOpen(true)
+  }
+  const savePrefs = async (event) => {
+    event.preventDefault()
+    setPrefsSaving(true)
+    setPrefsError('')
+    try {
+      const res = await saveJobPreferences(prefsDraft)
+      setPrefs(res.preferences)
+      setPrefsOpen(false)
+      // let the navbar bell refresh its unread badge right away
+      window.dispatchEvent(new Event('jobguard:prefs-saved'))
+    } catch (err) {
+      setPrefsError(err.message || 'Could not save your preferences.')
+    } finally {
+      setPrefsSaving(false)
+    }
+  }
+
   // Debounce handled above; every control just updates the filter state.
   const setFilter = (key) => (event) => {
     const value = event.target.type === 'checkbox' ? event.target.checked : event.target.value
@@ -78,10 +141,20 @@ export default function Jobs({ onAnalyzeJob, backendUp }) {
 
   return (
     <main className="page-shell jobs-page">
-      <section className="page-intro">
-        <p className="eyebrow"><span className="eyebrow-line" /> REAL JOB DISCOVERY</p>
-        <h1>Real Job Opportunities</h1>
-        <p className="page-subtitle">Browse current jobs from trusted external sources.</p>
+      <section className="page-intro jobs-intro-row">
+        <div>
+          <p className="eyebrow"><span className="eyebrow-line" /> REAL JOB DISCOVERY</p>
+          <h1>Real Job Opportunities</h1>
+          <p className="page-subtitle">Browse current jobs from trusted external sources.</p>
+          {prefs && alertsSummary(prefs) && (
+            <p className="jobs-alerts-summary" title="Your saved job preferences">
+              {alertsSummary(prefs)}
+            </p>
+          )}
+        </div>
+        <button type="button" className="jobs-prefs-btn" onClick={openPrefs}>
+          <Icon name="bell" size={15} strokeWidth={2} /> Job Preferences
+        </button>
       </section>
 
       <section className="jobs-toolbar card-surface" aria-label="Job filters">
@@ -255,6 +328,129 @@ export default function Jobs({ onAnalyzeJob, backendUp }) {
             </button>
           </nav>
         </>
+      )}
+
+      {/* Milestone 8B.2 — Job Preferences modal (compact, on demand) */}
+      {prefsOpen && (
+        <div
+          className="modal-overlay"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setPrefsOpen(false)
+          }}
+        >
+          <form className="modal-card card-surface" role="dialog" aria-modal="true" aria-label="Job Preferences" onSubmit={savePrefs}>
+            <div className="modal-head">
+              <h2>Job Preferences</h2>
+              <button type="button" className="modal-close" aria-label="Close preferences" onClick={() => setPrefsOpen(false)}>
+                <Icon name="close" size={16} strokeWidth={2} />
+              </button>
+            </div>
+            <p className="modal-sub">Tell JobGuard what to alert you about. Matching runs on cached external jobs only.</p>
+            <div className="jobs-field">
+              <label htmlFor="prefs-keywords">Keywords / Job Title</label>
+              <input
+                id="prefs-keywords"
+                type="text"
+                placeholder="e.g. Software Engineer"
+                value={prefsDraft.keywords}
+                onChange={(e) => setPrefsDraft((d) => ({ ...d, keywords: e.target.value }))}
+              />
+            </div>
+            <div className="jobs-field">
+              <label htmlFor="prefs-location">Preferred Location</label>
+              <input
+                id="prefs-location"
+                type="text"
+                placeholder="e.g. Lahore"
+                value={prefsDraft.location}
+                onChange={(e) => setPrefsDraft((d) => ({ ...d, location: e.target.value }))}
+              />
+            </div>
+            <div className="jobs-field">
+              <label htmlFor="prefs-source">Preferred Source</label>
+              <select
+                id="prefs-source"
+                value={prefsDraft.source}
+                onChange={(e) => setPrefsDraft((d) => ({ ...d, source: e.target.value }))}
+              >
+                <option value="any">Any</option>
+                <option value="remoteok">Remote OK</option>
+                <option value="arbeitnow">Arbeitnow</option>
+              </select>
+            </div>
+            <label className="jobs-remote-toggle" htmlFor="prefs-remote">
+              <input
+                id="prefs-remote"
+                type="checkbox"
+                checked={prefsDraft.remote_only}
+                onChange={(e) => setPrefsDraft((d) => ({ ...d, remote_only: e.target.checked }))}
+              />
+              <span>Remote Only</span>
+            </label>
+            {prefsError && <p className="prefs-error" role="alert">{prefsError}</p>}
+            <div className="modal-actions">
+              <button type="button" className="modal-cancel" onClick={() => setPrefsOpen(false)}>Cancel</button>
+              <button type="submit" className="btn-primary" disabled={prefsSaving}>
+                {prefsSaving ? 'Saving…' : 'Save Preferences'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Milestone 8B.2 — job detail (also the View Job target from the bell) */}
+      {detailJob && (
+        <div
+          className="modal-overlay"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setDetailJob(null)
+          }}
+        >
+          <div className="modal-card card-surface job-detail" role="dialog" aria-modal="true" aria-label="Job details">
+            <div className="modal-head">
+              <span className={`job-source-badge job-source-${detailJob.source}`}>
+                Source: {SOURCE_LABELS[detailJob.source] || detailJob.source}
+              </span>
+              <button type="button" className="modal-close" aria-label="Close job details" onClick={() => setDetailJob(null)}>
+                <Icon name="close" size={16} strokeWidth={2} />
+              </button>
+            </div>
+            <h2 className="job-title">{detailJob.title}</h2>
+            <p className="job-company">{detailJob.company || 'Company not listed'}</p>
+            <ul className="job-meta">
+              <li>{detailJob.remote ? 'Remote' : (detailJob.location || 'On-site')}</li>
+              {detailJob.job_type && <li>🕒 {detailJob.job_type}</li>}
+              {detailJob.salary && <li>💰 {detailJob.salary}</li>}
+              {formatDate(detailJob.published_at) && <li>📅 {formatDate(detailJob.published_at)}</li>}
+            </ul>
+            {detailJob.description && <p className="job-detail-desc">{detailJob.description}</p>}
+            <div className="modal-actions job-actions">
+              {detailJob.job_url && detailJob.job_url.startsWith('http') && (
+                <a className="job-link" href={detailJob.job_url} target="_blank" rel="noopener noreferrer">
+                  View Original Job <Icon name="arrow" size={14} />
+                </a>
+              )}
+              <button
+                type="button"
+                className="btn-primary job-analyze"
+                disabled={analyzingId !== null || backendUp === false}
+                onClick={async () => {
+                  setAnalyzingId('detail')
+                  try {
+                    await onAnalyzeJob(detailJob.description || detailJob.title, detailJob.title)
+                    setDetailJob(null)
+                  } finally {
+                    setAnalyzingId(null)
+                  }
+                }}
+              >
+                {analyzingId === 'detail' ? 'Analyzing…' : 'Analyze with JobGuard'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   )

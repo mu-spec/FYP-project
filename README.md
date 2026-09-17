@@ -243,3 +243,35 @@ their terms require). HTML is stripped server-side; descriptions are rendered
 as plain text only. "Analyze with JobGuard" sends the listing through the
 existing one-click analysis pipeline (same validator, XGBoost + rules engine,
 per-user History) with no scoring changes.
+
+🔔 Personalized Job Alerts (Milestone 8B.2)
+Every signed-in user can save one active job preference record (Keywords /
+Job Title, Preferred Location, Remote Only, Preferred Source — Any, Remote OK
+or Arbeitnow) from the "Job Preferences" panel on the Jobs page. Preferences
+live in the job_preferences table with UNIQUE(user_id) and belong strictly to
+the authenticated user. Matching is deterministic and explainable — plain text
+logic over the cached external jobs (every keyword term must appear in title,
+company, description or tags; case-insensitive location substring; optional
+remote-only; optional source filter). No ML is used for matching and the
+scam-detection model is untouched.
+
+Notifications are generated in-app only (no email/push) when a provider
+refresh imports NEW jobs: each saved preference set is matched against the
+newly imported rows and matching jobs create a notification that references
+the internal external_jobs.id. UNIQUE(user_id, external_job_id) guarantees the
+same job never notifies the same user twice, and a safe catch-up scan (last
+48 hours of cached jobs, capped) runs when preferences are saved or the
+notification list is opened. If a cached listing is later pruned, the
+notification keeps its title/message snapshot and is flagged
+"listing no longer cached". The navbar bell shows the unread count (hidden at
+zero), opens a scrollable panel with View Job / Mark as Read per item plus
+Mark All as Read, and View Job opens the job detail on the Jobs page with the
+original "View Original Job" and "Analyze with JobGuard" actions preserved.
+
+New authenticated APIs: GET/PUT /api/job-preferences (PUT requires the
+X-CSRF-Token header; strings are trimmed, length-capped and the source must be
+an approved value) and GET /api/notifications, GET
+/api/notifications/unread-count, POST /api/notifications/<id>/read, POST
+/api/notifications/read-all (the two POSTs require CSRF). Every query and
+update is filtered by the session user_id — one user can never read, mark or
+change another user's notifications or preferences, even by guessing ids.

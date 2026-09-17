@@ -67,6 +67,8 @@ function JobGuardApp({ user, onSignOut }) {
   const [backendUp, setBackendUp] = useState(null)
   const [health, setHealth] = useState(null)
   const [loading, setLoading] = useState(false)
+  // Milestone 8B.2 — external job handed over from a notification's View Job.
+  const [focusJob, setFocusJob] = useState(null)
   const [draft, setDraft] = useState('')
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
@@ -264,7 +266,19 @@ function JobGuardApp({ user, onSignOut }) {
 
   return (
     <div className="app-shell">
-      <Header page={page} onNavigate={navigate} backendUp={backendUp} health={health} user={user} onSignOut={onSignOut} />
+      <Header
+        page={page}
+        onNavigate={navigate}
+        backendUp={backendUp}
+        health={health}
+        user={user}
+        onSignOut={onSignOut}
+        onViewJob={(notification) => {
+          setFocusJob(notification.job)
+          navigate('jobs')
+        }}
+        onOpenPreferences={() => navigate('jobs')}
+      />
       {page === 'home' && (
         <Home
           value={draft}
@@ -296,7 +310,7 @@ function JobGuardApp({ user, onSignOut }) {
           ocrInfo={ocrInfo}
         />
       )}
-      {page === 'jobs' && <Jobs onAnalyzeJob={handleExternalJobAnalyze} backendUp={backendUp} />}
+      {page === 'jobs' && <Jobs onAnalyzeJob={handleExternalJobAnalyze} backendUp={backendUp} focusJob={focusJob} onClearFocus={() => setFocusJob(null)} />}
       {page === 'history' && <History backendUp={backendUp} refreshKey={historyKey} />}
       {page === 'insights' && <Insights backendUp={backendUp} onNavigate={navigate} />}
       {page === 'about' && <About />}

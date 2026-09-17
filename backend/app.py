@@ -56,6 +56,8 @@ from input_validation import REJECT_MESSAGE, validate_job_text
 import url_fetcher
 from url_fetcher import UrlFetchError, analyze_url
 from job_sources import service as job_service
+from job_sources import alerts as job_alerts
+from job_sources.matching import APPROVED_SOURCES, MAX_KEYWORDS, MAX_LOCATION
 
 # ------------------------------------------------------------------- Config
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
@@ -176,6 +178,10 @@ def init_db():
                 UNIQUE(source, source_job_id)
             )
         """)
+
+    # Milestone 8B.2 — per-user preferences + in-app notifications.
+    job_alerts.ensure_tables(DB_PATH)
+
 
 init_db()  # ensure table exists and old databases are migrated at startup
 
@@ -427,6 +433,105 @@ def list_jobs():
         DB_PATH, q=q or None, location=location or None,
         source=source or None, remote=remote, page=page,
     ))
+
+
+# ---------------------------------------------------------------------------
+# Milestone 8B.2 — personalized job preferences + in-app notifications
+# ---------------------------------------------------------------------------
+
+@app.get("/api/job-preferences")
+@require_auth
+def read_job_preferences():
+    """The signed-in user's saved job preferences (or null when unset)."""
+    prefs = job_alerts.get_preferences(DB_PATH, _current_user_row()["id"])
+    return jsonify({"preferences": prefs})
+
+
+@app.put("/api/job-preferences")
+@require_auth
+@require_csrf
+def save_job_preferences():
+    """Create/update the caller's single active preference record.
+
+    Validates server-side: trimmed strings, maximum lengths, approved source
+    values, boolean remote_only. UNIQUE(user_id) guarantees a user can only
+    ever store their own record. Saving also runs a safe catch-up match over
+    recently cached jobs so alerts start immediately (deduped, capped).
+    """
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        data = {}
+    keywords = (data.get("keywords") or "").strip()
+    location = (data.get("location") or "").strip()
+    remote_only = bool(data.get("remote_only"))
+    source = (data.get("source") or "any").strip().lower()
+
+    if len(keywords) > MAX_KEYWORDS:
+        return jsonify({"error": f"Keywords are too long (max {MAX_KEYWORDS} characters)."}), 400
+    if len(location) > MAX_LOCATION:
+        return jsonify({"error": f"Location is too long (max {MAX_LOCATION} characters)."}), 400
+    if source not in APPROVED_SOURCES:
+        return jsonify({"error": "Source must be one of: any, remoteok, arbeitnow."}), 400
+
+    prefs = job_alerts.save_preferences(
+        DB_PATH, _current_user_row()["id"],
+        keywords=keywords, location=location,
+        remote_only=remote_only, source=source,
+    )
+    matched = job_alerts.run_user_matching(DB_PATH, _current_user_row()["id"])
+    return jsonify({"preferences": prefs, "matched_cached_jobs": matched})
+
+
+@app.get("/api/notifications")
+@require_auth
+def list_notifications():
+    """The caller's notifications, newest first, plus unread count.
+
+    Opening the list also runs the safe catch-up match over recently cached
+    jobs (deduped by UNIQUE(user_id, external_job_id), capped), so existing
+    cached jobs can still surface. Rows always filter by the session user_id.
+    """
+    user_id = _current_user_row()["id"]
+    job_alerts.ensure_tables(DB_PATH)
+    job_alerts.run_user_matching(DB_PATH, user_id)
+    body = job_alerts.list_notifications(DB_PATH, user_id)
+    body["has_preferences"] = job_alerts.get_preferences(DB_PATH, user_id) is not None
+    return jsonify(body)
+
+
+@app.get("/api/notifications/unread-count")
+@require_auth
+def notifications_unread_count():
+    """Unread badge count, scoped to the signed-in user."""
+    job_alerts.ensure_tables(DB_PATH)
+    return jsonify({"unread": job_alerts.unread_count(DB_PATH, _current_user_row()["id"])})
+
+
+@app.post("/api/notifications/<int:notification_id>/read")
+@require_auth
+@require_csrf
+def notification_mark_read(notification_id):
+    """Mark one of the caller's notifications read.
+
+    The UPDATE is filtered by user_id AND id, so User A marking User B's
+    notification id is a 404, never a modification.
+    """
+    ok = job_alerts.mark_read(DB_PATH, _current_user_row()["id"], notification_id)
+    if not ok:
+        return jsonify({"error": "Notification not found."}), 404
+    return jsonify({
+        "ok": True,
+        "unread": job_alerts.unread_count(DB_PATH, _current_user_row()["id"]),
+    })
+
+
+@app.post("/api/notifications/read-all")
+@require_auth
+@require_csrf
+def notifications_mark_all_read():
+    """Mark every notification of the caller read (user-scoped UPDATE)."""
+    marked = job_alerts.mark_all_read(DB_PATH, _current_user_row()["id"])
+    return jsonify({"ok": True, "marked": marked, "unread": 0})
 
 
 @app.get("/api/health")
