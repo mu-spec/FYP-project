@@ -61,8 +61,8 @@ export default function ConfidenceTrend({ series }) {
         <AreaChart data={data} margin={{ top: 12, right: 18, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id="confFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#e1833f" stopOpacity={0.22} />
-              <stop offset="100%" stopColor="#e1833f" stopOpacity={0.02} />
+              <stop offset="0%" stopColor="#059669" stopOpacity={0.22} />
+              <stop offset="100%" stopColor="#059669" stopOpacity={0.02} />
             </linearGradient>
           </defs>
           <CartesianGrid stroke="var(--border)" strokeOpacity={0.55} strokeDasharray="3 6" vertical={false} />
