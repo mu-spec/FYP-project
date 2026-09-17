@@ -7,6 +7,7 @@ import History from './components/History.jsx'
 import Insights from './components/Insights.jsx'
 import About from './components/About.jsx'
 import Jobs from './components/Jobs.jsx'
+import PostJob from './components/PostJob.jsx'
 import AuthScreen from './components/AuthScreen.jsx'
 import Icon from './components/Icon.jsx'
 import { AuthProvider, useAuth } from './AuthContext.jsx'
@@ -20,7 +21,7 @@ import {
   OCR_FAILURE_MESSAGE,
 } from './lib/ocrText.js'
 
-const PAGES = new Set(['home', 'analyze', 'jobs', 'history', 'insights', 'about'])
+const PAGES = new Set(['home', 'analyze', 'jobs', 'post-job', 'history', 'insights', 'about'])
 
 function initialPage() {
   const hash = window.location.hash.replace('#', '')
@@ -311,6 +312,7 @@ function JobGuardApp({ user, onSignOut }) {
         />
       )}
       {page === 'jobs' && <Jobs onAnalyzeJob={handleExternalJobAnalyze} backendUp={backendUp} focusJob={focusJob} onClearFocus={() => setFocusJob(null)} />}
+      {page === 'post-job' && <PostJob backendUp={backendUp} />}
       {page === 'history' && <History backendUp={backendUp} refreshKey={historyKey} />}
       {page === 'insights' && <Insights backendUp={backendUp} onNavigate={navigate} />}
       {page === 'about' && <About />}

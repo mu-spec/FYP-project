@@ -57,6 +57,7 @@ import url_fetcher
 from url_fetcher import UrlFetchError, analyze_url
 from job_sources import service as job_service
 from job_sources import alerts as job_alerts
+import employer_profiles
 from job_sources.matching import APPROVED_SOURCES, MAX_KEYWORDS, MAX_LOCATION
 
 # ------------------------------------------------------------------- Config
@@ -181,6 +182,11 @@ def init_db():
 
     # Milestone 8B.2 — per-user preferences + in-app notifications.
     job_alerts.ensure_tables(DB_PATH)
+
+    # Milestone 8C.1 — employer registration (one profile per user, no
+    # credentials stored; an extension of the existing account, not a
+    # second authentication system).
+    employer_profiles.ensure_table(DB_PATH)
 
 
 init_db()  # ensure table exists and old databases are migrated at startup
@@ -532,6 +538,75 @@ def notifications_mark_all_read():
     """Mark every notification of the caller read (user-scoped UPDATE)."""
     marked = job_alerts.mark_all_read(DB_PATH, _current_user_row()["id"])
     return jsonify({"ok": True, "marked": marked, "unread": 0})
+
+
+# ---------------------------------------------------------------------------
+# Milestone 8C.1 — employer registration (registration only; no job posting)
+# ---------------------------------------------------------------------------
+
+def _employer_payload_response(profile):
+    return jsonify({"profile": profile})
+
+
+@app.get("/api/employer-profile")
+@require_auth
+def read_employer_profile():
+    """The signed-in user's employer profile, or null when not registered."""
+    employer_profiles.ensure_table(DB_PATH)
+    profile = employer_profiles.get_profile(DB_PATH, _current_user_row()["id"])
+    return _employer_payload_response(profile)
+
+
+@app.post("/api/employer-profile")
+@require_auth
+@require_csrf
+def create_employer_profile():
+    """Register the caller's employer profile (one per user, ever).
+
+    This is REGISTRATION ONLY: no job is created or published, and no third
+    party has verified the company. Ownership is the session's user_id —
+    UNIQUE(user_id) rejects a second profile for the same account.
+    """
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        data = {}
+    clean, field_errors = employer_profiles.validate_profile_data(data)
+    if field_errors:
+        return jsonify({
+            "error": next(iter(field_errors.values())),
+            "field_errors": field_errors,
+        }), 400
+
+    profile, err = employer_profiles.create_profile(DB_PATH, _current_user_row()["id"], clean)
+    if err == "duplicate":
+        return jsonify({"error": "An employer profile already exists for this account."}), 409
+    return _employer_payload_response(profile), 201
+
+
+@app.put("/api/employer-profile")
+@require_auth
+@require_csrf
+def update_employer_profile():
+    """Update the caller's existing employer profile in place.
+
+    The UPDATE is filtered by the session user_id: id, user_id and
+    created_at are preserved, updated_at refreshed. A second profile can
+    never be created through this route; users without a profile get 404.
+    """
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        data = {}
+    clean, field_errors = employer_profiles.validate_profile_data(data)
+    if field_errors:
+        return jsonify({
+            "error": next(iter(field_errors.values())),
+            "field_errors": field_errors,
+        }), 400
+
+    profile, err = employer_profiles.update_profile(DB_PATH, _current_user_row()["id"], clean)
+    if err == "missing":
+        return jsonify({"error": "No employer profile to update. Please register first."}), 404
+    return _employer_payload_response(profile)
 
 
 @app.get("/api/health")

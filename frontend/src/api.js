@@ -31,6 +31,8 @@ async function handle(res) {
     // Mark validation rejections so the UI can show a dedicated
     // "Invalid Job Description" state instead of a generic error.
     err.invalid = !!data.invalid_input
+    // Per-field validation maps (e.g. employer registration, 8C.1).
+    if (data.field_errors) err.fieldErrors = data.field_errors
     throw err
   }
   return data
@@ -188,6 +190,35 @@ export async function markAllNotificationsRead() {
   const res = await fetch(`${BASE}/notifications/read-all`, authedOptions({
     method: 'POST',
     credentials: 'include',
+  }))
+  return handle(res)
+}
+
+// ---------------------------------------------------------------------------
+// Milestone 8C.1 — employer registration (registration only, no job posting).
+// ---------------------------------------------------------------------------
+
+export async function getEmployerProfile() {
+  const res = await fetch(`${BASE}/employer-profile`, { credentials: 'include' })
+  return handle(res)
+}
+
+export async function createEmployerProfile(payload) {
+  const res = await fetch(`${BASE}/employer-profile`, authedOptions({
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }))
+  return handle(res)
+}
+
+export async function updateEmployerProfile(payload) {
+  const res = await fetch(`${BASE}/employer-profile`, authedOptions({
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   }))
   return handle(res)
 }

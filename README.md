@@ -275,3 +275,26 @@ an approved value) and GET /api/notifications, GET
 /api/notifications/read-all (the two POSTs require CSRF). Every query and
 update is filtered by the session user_id — one user can never read, mark or
 change another user's notifications or preferences, even by guessing ids.
+
+🏢 Employer Registration (Milestone 8C.1)
+A signed-in JobGuard user can choose "Post a Job" in the navigation and
+register an employer profile — one profile per account, stored in the
+employer_profiles table with UNIQUE(user_id) and linked to the existing
+authenticated user. There is no second authentication system and no
+credentials are stored in this table. Registration collects Company Name,
+Contact Person Name, Business Email, Company Website (optional), Location and
+Company Description; all values are trimmed, length-capped and validated on
+both the client and the server (valid email; website must be a real HTTP/HTTPS
+URL when provided). This feature is registration only — it does not create or
+publish jobs and it is NOT a third-party verification of any company.
+
+Authenticated APIs: GET /api/employer-profile (returns profile:null before
+registration), POST /api/employer-profile (creates the profile; duplicate
+registration is rejected with 409) and PUT /api/employer-profile (updates the
+caller's profile in place — id, user_id and created_at are preserved,
+updated_at refreshed). POST and PUT require the session and the X-CSRF-Token
+header. All reads and writes are scoped to the session user_id server-side:
+one user can never read or modify another user's employer profile. Before
+registration the Post a Job screen shows "Become an Employer"; after
+registration it shows the employer summary ("Employer profile ready") with
+edit support, and notes that job publishing will be enabled in the next stage.
