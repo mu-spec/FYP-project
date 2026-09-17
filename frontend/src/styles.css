@@ -2181,3 +2181,34 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .safety-blocked { border: 1px solid var(--scam-border); border-left: 4px solid var(--scam); color: var(--scam); background: var(--scam-soft); }
 .safety-passed { border: 1px solid var(--legit-border); border-left: 4px solid var(--legit); color: var(--legit); background: var(--legit-soft); }
 .safety-report .evidence-card { padding: 12px 14px; }
+
+
+/* ============================================================
+   Milestone 8C.3B — publishing + public JobGuard listings
+   ============================================================ */
+.status-published { border: 1px solid var(--primary); color: var(--primary); background: var(--surface-sunken); }
+.job-publish-action { color: var(--primary-bright); font-weight: 800; }
+.postjob-publish-btn {
+  padding: 9px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: var(--surface);
+  font-weight: 800;
+  font-size: .875rem;
+  cursor: pointer;
+}
+.postjob-publish-btn:disabled { opacity: .55; cursor: not-allowed; }
+.job-guard-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  border-radius: 8px;
+  background: var(--surface-sunken);
+  color: var(--muted);
+  font-size: .7813rem;
+}

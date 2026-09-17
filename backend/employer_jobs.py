@@ -69,6 +69,16 @@ def ensure_table(db_path):
                 ON employer_jobs (created_at);
             """
         )
+        # Milestone 8C.3B — safe in-place migration: published_at (NULL until
+        # the job is published). Existing rows keep every value; the added
+        # column is simply NULL for them.
+        cols = {row[1] for row in db.execute("PRAGMA table_info(employer_jobs)")}
+        if "published_at" not in cols:
+            db.execute("ALTER TABLE employer_jobs ADD COLUMN published_at TEXT")
+        db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_employer_jobs_published_at"
+            " ON employer_jobs (published_at)"
+        )
         db.commit()
 
 
@@ -191,6 +201,7 @@ def _row_to_job(row):
         "application_url": row["application_url"],
         "closing_date": row["closing_date"],
         "status": row["status"],
+        "published_at": row["published_at"],
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
@@ -297,6 +308,7 @@ def update_job(db_path, job_id, employer_profile_id, clean):
             UPDATE employer_jobs
                SET {_JOB_SET},
                    status = 'draft',
+                   published_at = NULL,
                    updated_at = ?
              WHERE id = ? AND employer_profile_id = ?
             """,
@@ -321,3 +333,79 @@ def delete_job(db_path, job_id, employer_profile_id):
         )
         db.commit()
         return cursor.rowcount > 0
+
+
+def publish_job(db_path, job_id, employer_profile_id, published_at):
+    """Milestone 8C.3B — publish the employer's own READY job.
+
+    The transition is only possible from status='ready' (a passed safety
+    screening with unchanged content). Returns True on success, False when
+    the row is missing, foreign, or not in 'ready' state.
+    """
+    with sqlite3.connect(db_path) as db:
+        cursor = db.execute(
+            """
+            UPDATE employer_jobs
+               SET status = 'published', published_at = ?, updated_at = ?
+             WHERE id = ? AND employer_profile_id = ? AND status = 'ready'
+            """,
+            (published_at, published_at, job_id, employer_profile_id),
+        )
+        db.commit()
+        return cursor.rowcount > 0
+
+
+def public_listings(db_path, q=None, location=None, remote=False):
+    """Published employer jobs in the public Jobs-page normalized shape.
+
+    ONLY status='published' rows leave this module — draft/flagged/ready are
+    never exposed. The table stays separate from external_jobs (nothing is
+    copied into it). Company always comes from the employer profile.
+    """
+    where = ["j.status = 'published'"]
+    params = []
+    if q:
+        like = f"%{q}%"
+        where.append("(j.title LIKE ? OR p.company_name LIKE ? OR j.description LIKE ?)")
+        params += [like, like, like]
+    if location:
+        where.append("j.location LIKE ?")
+        params.append(f"%{location}%")
+    if remote:
+        where.append("LOWER(j.job_type) LIKE '%remote%'")
+    clause = "WHERE " + " AND ".join(where)
+    with sqlite3.connect(db_path) as db:
+        db.row_factory = sqlite3.Row
+        rows = db.execute(
+            f"""
+            SELECT j.id, j.title, j.location, j.description, j.job_type,
+                   j.salary, j.requirements, j.benefits, j.published_at,
+                   p.company_name
+            FROM employer_jobs j
+            JOIN employer_profiles p ON p.id = j.employer_profile_id
+            {clause}
+            ORDER BY j.published_at DESC, j.id DESC
+            """,
+            params,
+        ).fetchall()
+    listings = []
+    for row in rows:
+        listings.append({
+            "id": row["id"],
+            "source": "jobguard",
+            "source_job_id": str(row["id"]),
+            "title": row["title"],
+            "company": row["company_name"],
+            "location": row["location"],
+            "description": row["description"],
+            "job_type": row["job_type"],
+            "remote": "remote" in (row["job_type"] or "").lower(),
+            "tags": [],
+            "salary": row["salary"],
+            "job_url": None,
+            "published_at": row["published_at"],
+            "fetched_at": None,
+            "requirements": row["requirements"],
+            "benefits": row["benefits"],
+        })
+    return listings

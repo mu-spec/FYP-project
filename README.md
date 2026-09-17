@@ -354,3 +354,26 @@ presentation and states plainly what the check is: automated screening only —
 JobGuard does not verify companies and no result is a guarantee. Flagged jobs
 show "Publishing blocked"; Ready jobs are ready for publishing in the next
 stage. There is still no publish action in this milestone.
+
+Milestone 8C.3B completes the pipeline: a job that passed the safety screening
+(status Ready) can be PUBLISHED with an explicit, confirmed action — passing
+the check never publishes automatically. POST /api/employer-jobs/<id>/publish
+requires the authenticated employer, their own job, a valid CSRF token, status
+'ready' and a valid latest screening; a fingerprint (sha256) of the exact
+screened text is stored with each screening and re-checked at publish time,
+so a pass on old text can never publish new text. Success stamps
+published_at (UTC) on the employer_jobs row (added by a safe in-place
+migration). Any later edit resets the job to draft, clears the stamp and
+removes it from the public feed instantly; deleting a published job removes
+it immediately.
+
+Published employer jobs appear on the existing Jobs page alongside RemoteOK
+and Arbeitnow listings with source 'jobguard' — the tables stay separate and
+nothing is copied into external_jobs. The Source filter gains a JobGuard
+option; JobGuard cards carry a Source: JobGuard badge and the line
+"Screened by JobGuard — automated risk screening, not a company
+verification." (never "100% Safe", "Verified Company" or "Guaranteed
+Legitimate"). "Analyze with JobGuard" on a public card uses the normal
+analysis flow and creates a normal History record — the employer's private
+pre-publish screening is never reused as user history. Personalized alerts
+are unchanged: they still match external provider jobs only.

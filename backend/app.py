@@ -445,10 +445,54 @@ def list_jobs():
         page = max(1, int(request.args.get("page", 1)))
     except ValueError:
         page = 1
-    return jsonify(job_service.get_jobs(
+
+    # Milestone 8C.3B — published JobGuard jobs join the SAME feed, without
+    # touching external_jobs. Only status='published' employer rows are ever
+    # returned here; draft/flagged/ready stay private to the employer.
+    employer_jobs.ensure_table(DB_PATH)
+    if source == "jobguard":
+        listings = employer_jobs.public_listings(DB_PATH, q=q or None,
+                                                 location=location or None,
+                                                 remote=remote)
+        total = len(listings)
+        start = (page - 1) * job_service.PAGE_SIZE
+        return jsonify({
+            "jobs": listings[start:start + job_service.PAGE_SIZE],
+            "total": total,
+            "page": page,
+            "page_size": job_service.PAGE_SIZE,
+            "pages": max(1, -(-total // job_service.PAGE_SIZE)),
+            "cache": None,  # no external provider refresh for this filter
+        })
+
+    fetch_all = source == "" and not remote
+    result = job_service.get_jobs(
         DB_PATH, q=q or None, location=location or None,
-        source=source or None, remote=remote, page=page,
-    ))
+        source=source or None, remote=remote, page=1,
+        limit=10 ** 6 if fetch_all else None,
+    )
+    if not fetch_all:
+        # explicit external provider filter (or remote-only): 8B.1 behavior
+        return jsonify(result)
+
+    external_jobs = result["jobs"]
+    guard_jobs = employer_jobs.public_listings(DB_PATH, q=q or None,
+                                               location=location or None)
+    combined = sorted(
+        external_jobs + guard_jobs,
+        key=lambda j: ((j.get("published_at") or ""), j.get("id") or 0),
+        reverse=True,
+    )
+    total = result["total"] + len(guard_jobs)
+    start = (page - 1) * job_service.PAGE_SIZE
+    return jsonify({
+        "jobs": combined[start:start + job_service.PAGE_SIZE],
+        "total": total,
+        "page": page,
+        "page_size": job_service.PAGE_SIZE,
+        "pages": max(1, -(-total // job_service.PAGE_SIZE)),
+        "cache": result["cache"],
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -768,7 +812,10 @@ def screen_employer_job(job_id):
         )
         db.commit()
 
-    screening = employer_screening.record_screening(DB_PATH, job_id, result)
+    screening = employer_screening.record_screening(
+        DB_PATH, job_id, result,
+        text_hash=employer_screening.content_hash(screening_text),
+    )
     updated_job = employer_jobs.get_job(DB_PATH, job_id, profile["id"])
     return jsonify({
         "job": updated_job,
@@ -799,6 +846,54 @@ def read_employer_job_screening(job_id):
     if screening is None:
         return jsonify({"error": "This job has not been screened yet."}), 404
     return jsonify({"job_id": job_id, "screening": screening})
+
+
+@app.post("/api/employer-jobs/<int:job_id>/publish")
+@require_auth
+@require_csrf
+def publish_employer_job(job_id):
+    """Milestone 8C.3B — publish the caller's own screened job.
+
+    Explicit, employer-only action. Eligibility (all enforced here, never by
+    the client): authenticated user, employer profile, ownership (foreign or
+    missing -> 404), valid CSRF, status == 'ready', and a latest screening
+    whose recorded text hash still matches the CURRENT job content (a pass on
+    old text never publishes new text). Success sets status='published' and
+    published_at (UTC); the job then appears in the public /api/jobs feed.
+    """
+    employer_jobs.ensure_table(DB_PATH)
+    employer_screening.ensure_table(DB_PATH)
+    profile, err = _current_employer_profile()
+    if err:
+        return err
+    job = employer_jobs.get_job(DB_PATH, job_id, profile["id"])
+    if job is None:
+        return jsonify({"error": "Job draft not found."}), 404
+
+    if job["status"] != "ready":
+        return jsonify({
+            "error": "Only a job whose safety check passed can be published."
+                     " Run the Safety Check first."
+        }), 409
+
+    latest = employer_screening.latest_screening(DB_PATH, job_id)
+    if latest is None:
+        return jsonify({"error": "No safety screening was found for this job."}), 409
+
+    current_text = employer_screening.compose_screening_text(job, profile)
+    recorded_hash = latest.get("text_hash")
+    if recorded_hash and recorded_hash != employer_screening.content_hash(current_text):
+        return jsonify({
+            "error": "The safety screening is out of date — the job changed"
+                     " after it was screened. Run the Safety Check again."
+        }), 409
+
+    published_at = employer_screening.now_iso()
+    if not employer_jobs.publish_job(DB_PATH, job_id, profile["id"], published_at):
+        return jsonify({"error": "Only a job whose safety check passed can be"
+                                 " published."}), 409
+    updated_job = employer_jobs.get_job(DB_PATH, job_id, profile["id"])
+    return jsonify({"job": updated_job, "published_at": published_at})
 
 
 @app.get("/api/health")

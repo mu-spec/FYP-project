@@ -89,7 +89,8 @@ class EmployerJobsSchemaTests(unittest.TestCase):
         expected = {"id", "employer_profile_id", "title", "location", "job_type",
                     "salary", "description", "requirements", "benefits",
                     "contact_email", "application_url", "closing_date",
-                    "status", "created_at", "updated_at"}
+                    "status", "created_at", "updated_at",
+                    "published_at"}  # 8C.3B: publication stamp (NULL until published)
         self.assertEqual(columns, expected)
         self.assertEqual(defaults["status"], "'draft'")
         self.assertIn("employer_profile_id", indexes)

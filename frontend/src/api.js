@@ -273,3 +273,12 @@ export async function getEmployerJobScreening(id) {
   const res = await fetch(`${BASE}/employer-jobs/${id}/screening`, { credentials: 'include' })
   return handle(res)
 }
+
+// Milestone 8C.3B — explicit publish of a Ready (screened) job draft.
+export async function publishEmployerJob(id) {
+  const res = await fetch(`${BASE}/employer-jobs/${id}/publish`, authedOptions({
+    method: 'POST',
+    credentials: 'include',
+  }))
+  return handle(res)
+}

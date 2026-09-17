@@ -155,8 +155,14 @@ def refresh_if_stale(db_path):
     }
 
 
-def get_jobs(db_path, q=None, location=None, source=None, remote=False, page=1):
-    """Deterministic, filtered, paginated job list for GET /api/jobs."""
+def get_jobs(db_path, q=None, location=None, source=None, remote=False, page=1,
+             limit=None):
+    """Deterministic, filtered, paginated job list for GET /api/jobs.
+
+    `limit` (Milestone 8C.3B) overrides the page size for a single call —
+    used by the merged public feed to fetch all matching external rows before
+    combining them with published JobGuard jobs. Default keeps 8B.1 behavior.
+    """
     cache = refresh_if_stale(db_path)
 
     where, params = [], []
@@ -184,7 +190,7 @@ def get_jobs(db_path, q=None, location=None, source=None, remote=False, page=1):
                 FROM external_jobs {clause}
                 ORDER BY published_at DESC, id DESC
                 LIMIT ? OFFSET ?""",
-            params + [PAGE_SIZE, offset],
+            params + [limit or PAGE_SIZE, offset],
         ).fetchall()
 
     jobs = []

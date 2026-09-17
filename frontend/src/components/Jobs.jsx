@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { getJobs, getJobPreferences, saveJobPreferences } from '../api.js'
 import Icon from './Icon.jsx'
 
-const SOURCE_LABELS = { remoteok: 'Remote OK', arbeitnow: 'Arbeitnow' }
+const SOURCE_LABELS = { remoteok: 'Remote OK', arbeitnow: 'Arbeitnow', jobguard: 'JobGuard' }
 
 function formatDate(iso) {
   if (!iso) return null
@@ -183,6 +183,7 @@ export default function Jobs({ onAnalyzeJob, backendUp, focusJob, onClearFocus }
             <label htmlFor="jobs-source">Source</label>
             <select id="jobs-source" value={filters.source} onChange={setFilter('source')}>
               <option value="">All sources</option>
+              <option value="jobguard">JobGuard</option>
               <option value="remoteok">Remote OK</option>
               <option value="arbeitnow">Arbeitnow</option>
             </select>
@@ -269,6 +270,12 @@ export default function Jobs({ onAnalyzeJob, backendUp, focusJob, onClearFocus }
                   {job.salary && <li>💰 {job.salary}</li>}
                   {formatDate(job.published_at) && <li>📅 {formatDate(job.published_at)}</li>}
                 </ul>
+                {job.source === 'jobguard' && (
+                  <p className="job-guard-note">
+                    <Icon name="shield" size={13} strokeWidth={2} /> Screened by JobGuard
+                    — automated risk screening, not a company verification.
+                  </p>
+                )}
                 {job.description && <p className="job-snippet">{snippet(job.description)}</p>}
                 <div className="job-actions">
                   {job.job_url && job.job_url.startsWith('http') && (

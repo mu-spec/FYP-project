@@ -73,7 +73,8 @@ class ScreeningSchemaTests(unittest.TestCase):
                 db.execute("SELECT * FROM sqlite_master WHERE type='index'")
             )
         expected = {"id", "employer_job_id", "prediction", "probability",
-                    "confidence", "evidence_json", "screened_at"}
+                    "confidence", "evidence_json", "screened_at",
+                    "text_hash"}  # 8C.3B: stale-screening fingerprint
         self.assertEqual(columns, expected)
         self.assertIn("employer_job_id", indexes)
         self.assertIn("screened_at", indexes)

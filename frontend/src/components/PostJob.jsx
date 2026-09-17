@@ -5,16 +5,18 @@
  * 8C.2: registered employers additionally create and manage their own JOB
  * DRAFTS (Create Job Post / My Job Posts / View / Edit / Delete). Every job
  * created here has status='draft' — the backend decides the status and the
- * UI offers NO publish action. Drafts are private to the owning employer:
- * they never appear in the Jobs feed, alerts or notifications (that
- * integration happens after AI screening in 8C.3).
+ * client can never set one. Drafts are private to the owning employer.
+ * 8C.3A: AI safety screening (Run Safety Check -> Ready / Flagged).
+ * 8C.3B: Ready jobs can be PUBLISHED with an explicit confirmation; only
+ * published jobs appear on the public Jobs page, and any edit instantly
+ * unpublishes (status -> draft, new safety check required).
  */
 
 import { useEffect, useState } from 'react'
 import {
   getEmployerProfile, createEmployerProfile, updateEmployerProfile,
   getEmployerJobs, createEmployerJob, updateEmployerJob, deleteEmployerJob,
-  screenEmployerJob, getEmployerJobScreening,
+  screenEmployerJob, getEmployerJobScreening, publishEmployerJob,
 } from '../api.js'
 import Icon from './Icon.jsx'
 
@@ -294,11 +296,15 @@ function JobForm({ initial, onSubmit, onCancel, saving, fieldErrors, topError })
 /* ------------------------------------------------------------------ */
 
 function StatusBadge({ status }) {
-  const label = status === 'ready' ? 'Ready' : status === 'flagged' ? 'Flagged' : 'Draft'
+  const label = status === 'ready' ? 'Ready to Publish'
+    : status === 'published' ? 'Published'
+    : status === 'flagged' ? 'Flagged' : 'Draft'
+  const icon = status === 'published' ? 'shield'
+    : status === 'ready' ? 'check'
+    : status === 'flagged' ? 'warning' : 'file'
   return (
     <span className={`status-badge status-${status}`}>
-      <Icon name={status === 'ready' ? 'check' : status === 'flagged' ? 'warning' : 'file'}
-        size={12} strokeWidth={2} /> {label}
+      <Icon name={icon} size={12} strokeWidth={2} /> {label}
     </span>
   )
 }
@@ -325,6 +331,9 @@ export default function PostJob({ backendUp }) {
   const [screeningError, setScreeningError] = useState('')
   const [reportJob, setReportJob] = useState(null) // job whose report is open
   const [report, setReport] = useState(null)       // full screening payload
+  // Milestone 8C.3B — explicit publish (confirmation first)
+  const [publishingJob, setPublishingJob] = useState(null)
+  const [publishBusy, setPublishBusy] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -392,6 +401,23 @@ export default function PostJob({ backendUp }) {
       setScreeningError(err.message || 'Could not run the safety check. Please try again.')
     } finally {
       setScreeningBusyId(null)
+    }
+  }
+
+  // Milestone 8C.3B — publish a Ready job (explicit action, never automatic).
+  const publishJob = async () => {
+    if (!publishingJob) return
+    setPublishBusy(true)
+    try {
+      const res = await publishEmployerJob(publishingJob.id)
+      setPublishingJob(null)
+      await refreshJobs()
+      setJobFlash(`Job published — "${res.job.title}" is now visible on the Jobs page.`)
+    } catch (err) {
+      setPublishingJob(null)
+      setScreeningError(err.message || 'Could not publish the job. Please try again.')
+    } finally {
+      setPublishBusy(false)
     }
   }
 
@@ -585,16 +611,18 @@ export default function PostJob({ backendUp }) {
                       <li>📍 {job.location}</li>
                       <li>🕒 {job.job_type}</li>
                       <li>Updated {formatDate(job.updated_at) || 'recently'}</li>
+                      {job.status === 'published' && job.published_at && (
+                        <li>📅 Published {formatDate(job.published_at)}</li>
+                      )}
                     </ul>
                   </div>
                   <div className="job-draft-actions">
                     <button type="button" className="notif-action" onClick={() => setDetailJob(job)}>View</button>
-                    {(job.status === 'flagged' || job.status === 'ready') && (
+                    {job.screening && (
                       <button type="button" className="notif-action" onClick={() => openReport(job)}>
                         View Safety Report
                       </button>
                     )}
-                    <button type="button" className="notif-action" onClick={() => openJobForm(job)}>Edit</button>
                     {job.status === 'draft' && (
                       <button
                         type="button"
@@ -615,9 +643,18 @@ export default function PostJob({ backendUp }) {
                         {screeningBusyId === job.id ? 'Checking…' : 'Re-run Safety Check'}
                       </button>
                     )}
-                    {job.status === 'draft' && (
-                      <button type="button" className="notif-action job-draft-delete" onClick={() => setDeletingJob(job)}>Delete</button>
+                    {job.status === 'ready' && (
+                      <button
+                        type="button"
+                        className="notif-action job-publish-action"
+                        disabled={publishBusy || backendUp === false}
+                        onClick={() => setPublishingJob(job)}
+                      >
+                        Publish
+                      </button>
                     )}
+                    <button type="button" className="notif-action" onClick={() => openJobForm(job)}>Edit</button>
+                    <button type="button" className="notif-action job-draft-delete" onClick={() => setDeletingJob(job)}>Delete</button>
                   </div>
                 </article>
               ))}
@@ -669,9 +706,13 @@ export default function PostJob({ backendUp }) {
                   <p className="safety-banner safety-blocked">
                     Publishing blocked — edit the job and run the safety check again.
                   </p>
+                ) : reportJob.status === 'published' ? (
+                  <p className="safety-banner safety-passed">
+                    Safety Check Passed — this job is published on the Jobs page.
+                  </p>
                 ) : (
                   <p className="safety-banner safety-passed">
-                    Safety Check Passed — ready for publishing in the next stage.
+                    Safety Check Passed — you can now publish this job.
                   </p>
                 )}
                 <div className="job-detail-section">
@@ -703,7 +744,7 @@ export default function PostJob({ backendUp }) {
                 </div>
                 <p className="postjob-note">
                   Automated screening only — JobGuard does not verify companies
-                  and no result is a guarantee. Publishing comes in the next stage.
+                  and no result is a guarantee. Publishing is a separate, explicit step.
                 </p>
               </>
             )}
@@ -824,6 +865,33 @@ export default function PostJob({ backendUp }) {
                 </button>
               )}
               <button type="button" className="modal-cancel" onClick={() => setDetailJob(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8C.3B — Publish confirmation */}
+      {publishingJob && (
+        <div
+          className="modal-overlay"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && !publishBusy) setPublishingJob(null)
+          }}
+        >
+          <div className="modal-card card-surface postjob-publish-dialog" role="alertdialog" aria-modal="true" aria-label="Publish job">
+            <h2>Publish this job?</h2>
+            <p className="modal-sub">
+              &ldquo;{publishingJob.title}&rdquo; passed the AI safety check.
+              {' '}It will become visible to JobGuard users.
+            </p>
+            <div className="modal-actions">
+              <button type="button" className="modal-cancel" onClick={() => setPublishingJob(null)} disabled={publishBusy}>
+                Cancel
+              </button>
+              <button type="button" className="postjob-publish-btn" onClick={publishJob} disabled={publishBusy}>
+                {publishBusy ? 'Publishing…' : 'Publish'}
+              </button>
             </div>
           </div>
         </div>

@@ -19,10 +19,21 @@ Publishing is NOT part of this milestone, and a screening is not a guarantee:
 the report never claims a company is verified or a job is 100% safe.
 """
 
+import hashlib
 import json
 import sqlite3
 
 from job_sources.service import now_iso
+
+
+def content_hash(text):
+    """sha256 fingerprint of the exact screening text (stale-screening guard).
+
+    A job may publish only when the content that would go public is the same
+    content that passed the safety check. The hash recorded at screening time
+    is compared against a fresh composition at publish time.
+    """
+    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()
 
 
 def ensure_table(db_path):
@@ -45,6 +56,13 @@ def ensure_table(db_path):
                 ON employer_job_screenings (screened_at);
             """
         )
+        # Milestone 8C.3B — safe in-place migration: text_hash (sha256 of the
+        # exact screening text). Older rows keep NULL (status-based freshness
+        # still applies to them); new screenings always store the hash so a
+        # publish can prove the pass belongs to the CURRENT content.
+        cols = {row[1] for row in db.execute("PRAGMA table_info(employer_job_screenings)")}
+        if "text_hash" not in cols:
+            db.execute("ALTER TABLE employer_job_screenings ADD COLUMN text_hash TEXT")
         db.commit()
 
 
@@ -85,10 +103,11 @@ def compose_screening_text(job, profile):
     return "\n".join(lines).strip()
 
 
-def record_screening(db_path, job_id, result):
+def record_screening(db_path, job_id, result, text_hash=None):
     """Persist one engine result as a screening audit record.
 
     `result` is the untouched dict returned by the existing predict_one().
+    `text_hash` fingerprints the screened text (8C.3B stale-screening guard).
     Returns the stored screening dict (evidence parsed for the UI).
     """
     screened_at = now_iso()
@@ -98,15 +117,16 @@ def record_screening(db_path, job_id, result):
             """
             INSERT INTO employer_job_screenings
                 (employer_job_id, prediction, probability, confidence,
-                 evidence_json, screened_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+                 evidence_json, screened_at, text_hash)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (job_id,
              result.get("prediction"),
              float(result.get("probabilities", {}).get("scam", 0.0)),
              float(result.get("confidence", 0.0)),
              json.dumps(red_flags, ensure_ascii=False),
-             screened_at),
+             screened_at,
+             text_hash),
         )
         db.commit()
         screening_id = cursor.lastrowid
@@ -145,4 +165,5 @@ def latest_screening(db_path, job_id):
         "confidence": row["confidence"],
         "red_flags": red_flags,
         "screened_at": row["screened_at"],
+        "text_hash": row["text_hash"],
     }
