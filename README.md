@@ -52,6 +52,12 @@ cd models && python train_model.py
 cd backend && pip install -r requirements.txt && python app.py
 #    optional but recommended — a stable secret keeps sessions across restarts:
 #    JOBGUARD_SECRET_KEY=<random string> python app.py
+#
+#    Optional — Adzuna job source (8E.2). Without these the app works fine and
+#    simply shows the other providers; set them only if you want Adzuna jobs:
+#    ADZUNA_APP_ID=<your id> ADZUNA_APP_KEY=<your key> python app.py
+#    ADZUNA_COUNTRY defaults to "gb" (Adzuna's jobs index is per-country);
+#    keep credentials out of git — environment variables only.
 
 # 3) Frontend → http://localhost:5173
 cd frontend && npm install && npm run dev
@@ -223,8 +229,8 @@ authentication itself remains purely session-cookie based.
 
 🔎 Real Job Discovery (Milestone 8B.1)
 The Jobs page ("Real Job Opportunities") shows real external job postings from
-three official public APIs — Remote OK (https://remoteok.com/api), Arbeitnow
-(https://www.arbeitnow.com/api/job-board-api) and Jobicy (https://jobicy.com/api/v2/remote-jobs,
+four official public APIs — Remote OK (https://remoteok.com/api), Arbeitnow
+(https://www.arbeitnow.com/api/job-board-api), Jobicy (https://jobicy.com/api/v2/remote-jobs,
 (https://www.arbeitnow.com/api/job-board-api). No scraping and no API keys are
 used, and job APIs are only ever called by the Flask backend (never from
 React). Postings are normalized into a shared shape (source, source_job_id,
