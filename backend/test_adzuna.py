@@ -343,7 +343,7 @@ class AdzunaApiTests(_DBCase):
         top = data["jobs"][0]
         self.assertEqual(top["job_url"], "https://www.adzuna.co.uk/jobs/land/9002")  # newest first
         self.assertEqual(data["cache"]["sources"],
-                         ["remoteok", "arbeitnow", "jobicy", "adzuna"])
+                         ["remoteok", "arbeitnow", "jobicy", "adzuna", "upwork"])
 
     def test_search_and_location_filters_on_adzuna(self):
         self._seed_mixed()

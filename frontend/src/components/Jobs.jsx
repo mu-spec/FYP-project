@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { getJobs, getJobPreferences, saveJobPreferences } from '../api.js'
 import Icon from './Icon.jsx'
 
-const SOURCE_LABELS = { remoteok: 'Remote OK', arbeitnow: 'Arbeitnow', jobicy: 'Jobicy', adzuna: 'Adzuna', jobguard: 'JobGuard' }
+const SOURCE_LABELS = { remoteok: 'Remote OK', arbeitnow: 'Arbeitnow', jobicy: 'Jobicy', adzuna: 'Adzuna', upwork: 'Upwork', jobguard: 'JobGuard' }
 
 function formatDate(iso) {
   if (!iso) return null
@@ -185,6 +185,7 @@ export default function Jobs({ onAnalyzeJob, backendUp, focusJob, onClearFocus }
               <option value="">All sources</option>
               <option value="jobicy">Jobicy</option>
               <option value="adzuna">Adzuna</option>
+              <option value="upwork">Upwork</option>
               <option value="jobguard">JobGuard</option>
               <option value="remoteok">Remote OK</option>
               <option value="arbeitnow">Arbeitnow</option>

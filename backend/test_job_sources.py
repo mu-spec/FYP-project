@@ -331,7 +331,7 @@ class JobsApiTests(unittest.TestCase):
         self.assertEqual(data["page"], 2)
         self.assertEqual(data["total"], 25)
         self.assertEqual(data["pages"], 2)
-        self.assertEqual(data["cache"]["sources"], ["remoteok", "arbeitnow", "jobicy", "adzuna"])
+        self.assertEqual(data["cache"]["sources"], ["remoteok", "arbeitnow", "jobicy", "adzuna", "upwork"])
         self.assertEqual(len(data["jobs"]), 5)
         self.assertIn("cache", data)
         job = data["jobs"][0]

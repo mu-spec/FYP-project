@@ -16,7 +16,7 @@ import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
 
-from . import adzuna, arbeitnow, jobicy, remote_ok
+from . import adzuna, arbeitnow, jobicy, remote_ok, upwork
 from .normalize import now_iso, strip_html
 
 PAGE_SIZE = 20
@@ -32,10 +32,13 @@ PROVIDER_FRESHNESS = {
     "jobicy": timedelta(minutes=60),
     # 30 min sits comfortably inside Adzuna's free daily call quota
     "adzuna": FRESHNESS,
+    # Upwork: conservative 60-min window (their 24h cache ceiling is never
+    # approached; 429s fall back to the cached rows)
+    "upwork": timedelta(minutes=60),
 }
 
 PROVIDERS = {"remoteok": remote_ok, "arbeitnow": arbeitnow, "jobicy": jobicy,
-             "adzuna": adzuna}
+             "adzuna": adzuna, "upwork": upwork}
 VALID_SOURCES = set(PROVIDERS)
 
 _lock = threading.Lock()

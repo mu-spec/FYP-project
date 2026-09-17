@@ -334,7 +334,7 @@ class JobicyApiTests(_DBCase):
             self.assertIn(key, data["jobs"][0])
         top = data["jobs"][0]
         self.assertEqual(top["job_url"], "https://jobicy.com/jobs/102-designer")  # newest first
-        self.assertEqual(data["cache"]["sources"], ["remoteok", "arbeitnow", "jobicy", "adzuna"])
+        self.assertEqual(data["cache"]["sources"], ["remoteok", "arbeitnow", "jobicy", "adzuna", "upwork"])
 
     def test_existing_sources_still_filter(self):
         self._seed_mixed()
