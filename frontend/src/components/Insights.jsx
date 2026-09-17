@@ -1,22 +1,26 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getHistory } from '../api.js'
+import {
+  toPercent01, computeVerdictDistribution, buildConfidenceSeries,
+  aggregateWarningSigns, averageConfidence,
+} from '../insightsData.js'
+import VerdictDonut from './charts/VerdictDonut.jsx'
+import ConfidenceTrend from './charts/ConfidenceTrend.jsx'
+import WarningBars from './charts/WarningBars.jsx'
 import Icon from './Icon.jsx'
-
-const fmtPct1 = (value) => `${(Math.max(0, Math.min(1, Number(value) || 0)) * 100).toFixed(1)}%`
 
 function formatDate(value) {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
-const SEVERITY_CLASS = { high: 'sev-high', medium: 'sev-medium', low: 'sev-low' }
-
 /**
- * Milestone 7E — real Insights, derived ONLY from the existing History API
- * fields (id, job_title, prediction, confidence, created_at, evidence[]).
- * Nothing is mocked or invented: every number on this page is computed from
- * the records the backend already returns. Metrics that cannot be derived
- * reliably (e.g. per-record scam probability) are intentionally not shown.
+ * Milestone 8F.1 — professional analytics dashboard for the existing
+ * Insights screen. Same data source as 7E (the signed-in user's History
+ * records via /api/history — never another user's, never global), same KPI
+ * formulas (pure transforms in insightsData.js), now visualized with real
+ * charts: verdict donut, confidence trend and warning-sign bars. Recent
+ * analyses stay a list. No fake/demo data is ever rendered.
  */
 export default function Insights({ backendUp, onNavigate }) {
   const [rows, setRows] = useState(null) // null = loading
@@ -30,39 +34,17 @@ export default function Insights({ backendUp, onNavigate }) {
 
   const stats = useMemo(() => {
     if (!Array.isArray(rows)) return null
-    const total = rows.length
-    if (total === 0) return { total: 0 }
-
-    const scamRows = rows.filter((row) => row.prediction === 'Scam')
-    const legitRows = rows.filter((row) => row.prediction === 'Legitimate')
-
-    // Most common red-flag categories across saved evidence maps.
-    const categories = new Map()
-    for (const row of rows) {
-      const evidence = Array.isArray(row.evidence) ? row.evidence : []
-      for (const flag of evidence) {
-        const name = flag.category || flag.message || 'Detected signal'
-        const severity = String(flag.severity || 'Low').toLowerCase()
-        const entry = categories.get(name) || { count: 0, severity }
-        entry.count += 1
-        categories.set(name, entry)
-      }
-    }
-    const topFlags = [...categories.entries()]
-      .map(([category, info]) => ({ category, ...info }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 6)
-    const maxFlagCount = topFlags.length ? topFlags[0].count : 0
-
+    const distribution = computeVerdictDistribution(rows)
     return {
-      total,
-      scamCount: scamRows.length,
-      legitCount: legitRows.length,
-      scamShare: total ? scamRows.length / total : 0,
-      legitShare: total ? legitRows.length / total : 0,
-      avgConfidence: total ? rows.reduce((sum, row) => sum + (Number(row.confidence) || 0), 0) / total : 0,
-      topFlags,
-      maxFlagCount,
+      total: distribution.total,
+      scamCount: distribution.scam.count,
+      legitCount: distribution.legitimate.count,
+      scamShare: distribution.scam.share,
+      legitShare: distribution.legitimate.share,
+      avgConfidence: averageConfidence(rows),
+      distribution,
+      series: buildConfidenceSeries(rows),
+      topFlags: aggregateWarningSigns(rows, 6),
       recent: rows.slice(0, 5),
       lastAnalyzed: rows[0]?.created_at || null,
     }
@@ -74,7 +56,7 @@ export default function Insights({ backendUp, onNavigate }) {
         <div className="page-intro">
           <div className="eyebrow"><span className="eyebrow-line" /> Insights</div>
           <h1>Patterns from your analyses</h1>
-          <p>A live summary of every valid prediction stored in History — scam share, average decision confidence and the warning signs detected most often.</p>
+          <p>A live summary of every valid prediction stored in History — verdict split, confidence trend and the warning signs detected most often.</p>
         </div>
 
         {!backendUp && (
@@ -105,8 +87,8 @@ export default function Insights({ backendUp, onNavigate }) {
           <section className="empty-insights card-surface">
             <span className="empty-icon"><Icon name="chart" size={26} /></span>
             <span className="section-label">Nothing to summarize yet</span>
-            <h2>No insights yet</h2>
-            <p>Analyze a few job posts to see patterns and warning signals here.</p>
+            <h2>No analysis insights yet</h2>
+            <p>Analyze your first job to start building insights.</p>
             <button type="button" className="btn btn-primary insights-cta" onClick={() => onNavigate?.('home')}>
               <Icon name="search" size={17} /> Analyze a Job
             </button>
@@ -124,34 +106,37 @@ export default function Insights({ backendUp, onNavigate }) {
               <article className="insight-card card-surface">
                 <span className="metric-label">Flagged as scam</span>
                 <strong className="insight-value scam">{stats.scamCount.toLocaleString()}</strong>
-                <span className="metric-help">{fmtPct1(stats.scamShare)} of all analyses</span>
+                <span className="metric-help">{toPercent01(stats.scamShare)} of all analyses</span>
               </article>
               <article className="insight-card card-surface">
                 <span className="metric-label">Looked legitimate</span>
                 <strong className="insight-value legit">{stats.legitCount.toLocaleString()}</strong>
-                <span className="metric-help">{fmtPct1(stats.legitShare)} of all analyses</span>
+                <span className="metric-help">{toPercent01(stats.legitShare)} of all analyses</span>
               </article>
               <article className="insight-card card-surface">
                 <span className="metric-label">Avg decision confidence</span>
-                <strong className="insight-value">{fmtPct1(stats.avgConfidence)}</strong>
+                <strong className="insight-value">{toPercent01(stats.avgConfidence)}</strong>
                 <span className="metric-help">Winning-class probability, all records</span>
               </article>
             </section>
 
-            <section className="insights-panel card-surface" aria-label="Scam vs legitimate split">
-              <div className="insights-panel-head">
-                <h2>Scam vs legitimate</h2>
-                <span className="insights-panel-note">Share of saved verdicts</span>
-              </div>
-              <div className="split-bar" role="img" aria-label={`Scam ${fmtPct1(stats.scamShare)}, legitimate ${fmtPct1(stats.legitShare)}`}>
-                <span className="seg-scam" style={{ width: `${(stats.scamShare * 100).toFixed(2)}%` }} />
-                <span className="seg-legit" style={{ width: `${(stats.legitShare * 100).toFixed(2)}%` }} />
-              </div>
-              <div className="split-legend">
-                <span className="legend-item"><span className="legend-dot dot-scam" /> Scam · {stats.scamCount} ({fmtPct1(stats.scamShare)})</span>
-                <span className="legend-item"><span className="legend-dot dot-legit" /> Legitimate · {stats.legitCount} ({fmtPct1(stats.legitShare)})</span>
-              </div>
-            </section>
+            <div className="insights-charts-row">
+              <section className="insights-panel card-surface" aria-label="Verdict distribution">
+                <div className="insights-panel-head">
+                  <h2>Verdict Distribution</h2>
+                  <span className="insights-panel-note">Share of saved verdicts</span>
+                </div>
+                <VerdictDonut distribution={stats.distribution} />
+              </section>
+
+              <section className="insights-panel card-surface" aria-label="Analysis confidence trend">
+                <div className="insights-panel-head">
+                  <h2>Analysis Confidence Trend</h2>
+                  <span className="insights-panel-note">Decision confidence over time</span>
+                </div>
+                <ConfidenceTrend series={stats.series} />
+              </section>
+            </div>
 
             <section className="insights-panel card-surface" aria-label="Most common warning signs">
               <div className="insights-panel-head">
@@ -159,19 +144,7 @@ export default function Insights({ backendUp, onNavigate }) {
                 <span className="insights-panel-note">From saved evidence maps</span>
               </div>
               {stats.topFlags.length > 0 ? (
-                <div className="flag-ranks">
-                  {stats.topFlags.map((flag) => (
-                    <div className="flag-rank" key={flag.category}>
-                      <div className="flag-rank-top">
-                        <strong>{flag.category}</strong>
-                        <span className="flag-rank-count">{flag.count}× {flag.severity} severity</span>
-                      </div>
-                      <div className={`flag-rank-bar ${SEVERITY_CLASS[flag.severity] || 'sev-low'}`}>
-                        <span style={{ width: `${Math.max(8, (flag.count / stats.maxFlagCount) * 100).toFixed(1)}%` }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <WarningBars flags={stats.topFlags} />
               ) : (
                 <p className="insights-panel-empty">No red flags have been recorded yet — every analyzed post came back clean.</p>
               )}
@@ -189,7 +162,7 @@ export default function Insights({ backendUp, onNavigate }) {
                   <div className="recent-row" key={row.id}>
                     <span className={`table-verdict ${row.prediction === 'Scam' ? 'table-scam' : 'table-legit'}`}><span />{row.prediction}</span>
                     <span className="recent-title" title={row.job_title}>{row.job_title || 'Untitled job'}</span>
-                    <span className="recent-conf">{fmtPct1(row.confidence)}</span>
+                    <span className="recent-conf">{toPercent01(row.confidence)}</span>
                     <span className="recent-date">{formatDate(row.created_at)}</span>
                   </div>
                 ))}
