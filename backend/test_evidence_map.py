@@ -188,6 +188,9 @@ class EvidenceApiTests(unittest.TestCase):
         self.assertEqual(row["evidence"], expected)
 
     def test_old_history_rows_remain_readable(self):
+        # Milestone 8A.2: legacy rows (pre-user column, user_id = NULL) are
+        # preserved in the database but are invisible to authenticated users —
+        # History is strictly per-user and legacy rows are never reassigned.
         with sqlite3.connect(self.app_module.DB_PATH) as db:
             db.execute(
                 "INSERT INTO predictions "
@@ -195,9 +198,15 @@ class EvidenceApiTests(unittest.TestCase):
                 ("old record", "Legitimate", 0.9, "2025-01-01T00:00:00+00:00"),
             )
             db.commit()
+            count = db.execute(
+                "SELECT COUNT(*) FROM predictions WHERE job_title = 'old record'"
+            ).fetchone()[0]
+        self.assertEqual(count, 1)  # still stored, not deleted
         history = self.client.get("/api/history").get_json()
-        row = next(item for item in history if item["job_title"] == "old record")
-        self.assertEqual(row["evidence"], [])
+        self.assertEqual(
+            [item for item in history if item["job_title"] == "old record"],
+            [],  # invisible through the authenticated History API
+        )
 
 
 if __name__ == "__main__":

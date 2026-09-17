@@ -32,6 +32,7 @@ Run:  python app.py          (http://localhost:5000)
 """
 
 import functools
+import hmac
 import json
 import os
 import re
@@ -119,6 +120,7 @@ def init_db():
                 prediction    TEXT    NOT NULL,
                 confidence    REAL    NOT NULL,
                 created_at    TEXT    NOT NULL,
+                user_id       INTEGER,
                 evidence_json TEXT
             )
         """)
@@ -127,6 +129,17 @@ def init_db():
         columns = {row[1] for row in db.execute("PRAGMA table_info(predictions)")}
         if "evidence_json" not in columns:
             db.execute("ALTER TABLE predictions ADD COLUMN evidence_json TEXT")
+        # Milestone 8A.2 — per-user prediction history. Fresh databases create
+        # the column directly; existing databases are migrated IN PLACE (no
+        # drop/recreate): rows are preserved with user_id = NULL, which keeps
+        # legacy rows stored but invisible to every authenticated user (they
+        # are never reassigned to a new account).
+        if "user_id" not in columns:
+            db.execute("ALTER TABLE predictions ADD COLUMN user_id INTEGER")
+        db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_predictions_user_id "
+            "ON predictions(user_id)"
+        )
         # Milestone 8A.1 — application users (never part of the prediction
         # schema). Only the Werkzeug hash is stored, never a plaintext
         # password and never a password hash in any API response.
@@ -190,6 +203,32 @@ def require_auth(view):
         return view(*args, **kwargs)
     return wrapped
 
+def _csrf_token():
+    """Session-bound CSRF token (created lazily, lives in the session only)."""
+    token = session.get("csrf_token")
+    if not token:
+        token = secrets.token_hex(32)
+        session["csrf_token"] = token
+    return token
+
+def require_csrf(view):
+    """Reject authenticated state-changing calls without a valid CSRF token.
+
+    The token is issued inside the session (returned by /api/auth/me and the
+    signup/login responses) and must be echoed in the X-CSRF-Token header.
+    """
+    @functools.wraps(view)
+    def wrapped(*args, **kwargs):
+        sent = request.headers.get("X-CSRF-Token", "")
+        expected = session.get("csrf_token", "")
+        if not expected or not hmac.compare_digest(sent, expected):
+            return jsonify({
+                "error": "Invalid or missing CSRF token.",
+                "csrf_error": True,
+            }), 403
+        return view(*args, **kwargs)
+    return wrapped
+
 @app.post("/api/auth/signup")
 def auth_signup():
     data = request.get_json(silent=True) or {}
@@ -235,8 +274,9 @@ def auth_signup():
     get_db().commit()
     session.clear()
     session["user_id"] = cur.lastrowid
+    csrf = _csrf_token()
     row = get_db().execute("SELECT * FROM users WHERE id = ?", (cur.lastrowid,)).fetchone()
-    return jsonify({"authenticated": True, "user": _public_user(row)}), 201
+    return jsonify({"authenticated": True, "user": _public_user(row), "csrf_token": csrf}), 201
 
 @app.post("/api/auth/login")
 def auth_login():
@@ -262,9 +302,11 @@ def auth_login():
     get_db().commit()
     session.clear()
     session["user_id"] = row["id"]
-    return jsonify({"authenticated": True, "user": _public_user(row)})
+    csrf = _csrf_token()
+    return jsonify({"authenticated": True, "user": _public_user(row), "csrf_token": csrf})
 
 @app.post("/api/auth/logout")
+@require_csrf
 def auth_logout():
     session.clear()
     return jsonify({"authenticated": False})
@@ -274,7 +316,7 @@ def auth_me():
     row = _current_user_row()
     if row is None:
         return jsonify({"authenticated": False})
-    return jsonify({"authenticated": True, "user": _public_user(row)})
+    return jsonify({"authenticated": True, "user": _public_user(row), "csrf_token": _csrf_token()})
 
 # --------------------------------------------------------------- Prediction
 def build_features(raw_text: str):
@@ -326,16 +368,17 @@ def predict_one(job_text: str, title: str) -> dict:
     return result
 
 # ------------------------------------------------------------------- Routes
-def _store_history(result: dict) -> None:
+def _store_history(result: dict, user_id=None) -> None:
     """PRD 5.7 — store a completed prediction in history (unchanged schema)."""
     db = get_db()
     db.execute(
         "INSERT INTO predictions "
-        "(job_title, prediction, confidence, created_at, evidence_json) "
-        "VALUES (?,?,?,?,?)",
+        "(job_title, prediction, confidence, created_at, evidence_json, user_id) "
+        "VALUES (?,?,?,?,?,?)",
         (result["job_title"], result["prediction"], result["confidence"],
          datetime.now(timezone.utc).isoformat(),
-         json.dumps(result.get("red_flags", []), ensure_ascii=False)),
+         json.dumps(result.get("red_flags", []), ensure_ascii=False),
+         user_id),
     )
     db.commit()
 
@@ -353,6 +396,7 @@ def health():
 
 @app.post("/api/predict")
 @require_auth
+@require_csrf
 def predict():
     if model is None:
         return jsonify({"error": "Model not trained. Run models/train_model.py first."}), 503
@@ -384,13 +428,14 @@ def predict():
         return jsonify({"error": "Job description too long (max 50,000 chars)."}), 400
 
     result = predict_one(job_text, title)
-    _store_history(result)
+    _store_history(result, session.get("user_id"))
 
     return jsonify(result)
 
 
 @app.post("/api/predict-url")
 @require_auth
+@require_csrf
 def predict_url():
     """Milestone 7B — analyze a public job-posting URL.
 
@@ -442,7 +487,7 @@ def predict_url():
         title = (page["title"] or "").strip()[:200] or "Job posting from URL"
 
     result = predict_one(job_text, title)
-    _store_history(result)
+    _store_history(result, session.get("user_id"))
 
     return jsonify(result)
 
@@ -453,7 +498,8 @@ def history():
     limit = min(int(request.args.get("limit", 50)), 200)
     rows = get_db().execute(
         "SELECT id, job_title, prediction, confidence, created_at, evidence_json "
-        "FROM predictions ORDER BY id DESC LIMIT ?", (limit,),
+        "FROM predictions WHERE user_id = ? ORDER BY id DESC LIMIT ?",
+        (session.get("user_id"), limit),
     ).fetchall()
     history_rows = []
     for row in rows:
@@ -469,9 +515,10 @@ def history():
 
 @app.delete("/api/history")
 @require_auth
+@require_csrf
 def clear_history():
     db = get_db()
-    db.execute("DELETE FROM predictions")
+    db.execute("DELETE FROM predictions WHERE user_id = ?", (session.get("user_id"),))
     db.commit()
     return jsonify({"cleared": True})
 

@@ -415,10 +415,15 @@ class PredictUrlApiTests(unittest.TestCase):
         import sqlite3
         with sqlite3.connect(self.app_module.DB_PATH) as db:
             columns = [row[1] for row in db.execute("PRAGMA table_info(predictions)")]
+        # Milestone 8A.2 added the nullable user_id column (in-place migration,
+        # safe: old rows keep NULL and stay stored). Nothing else changed.
+        # Column ORDER differs between fresh databases (user_id before
+        # evidence_json) and migrated ones (appended at the end), so compare
+        # as a set — all queries name columns explicitly.
         self.assertEqual(
-            columns,
-            ["id", "job_title", "prediction", "confidence", "created_at",
-             "evidence_json"],
+            set(columns),
+            {"id", "job_title", "prediction", "confidence", "created_at",
+             "user_id", "evidence_json"},
         )
 
 

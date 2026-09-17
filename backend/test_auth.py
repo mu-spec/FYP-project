@@ -65,6 +65,10 @@ class AuthTestBase(unittest.TestCase):
     def _unique_email(self):
         return f"user{uuid4().hex[:8]}@example.com"
 
+    def _csrf_header(self):
+        data = self.client.get("/api/auth/me").get_json()
+        return {"X-CSRF-Token": (data or {}).get("csrf_token", "")}
+
     def _signup(self, email=None, name=GOOD_NAME, password=GOOD_PASSWORD,
                 confirm=None, raw_email=None):
         payload = {"name": name, "email": raw_email if raw_email is not None else (email or self._unique_email()),
@@ -196,10 +200,12 @@ class LoginLogoutTests(AuthTestBase):
     def test_logout_clears_session(self):
         self._signup()
         self.assertEqual(self.client.get("/api/auth/me").get_json()["authenticated"], True)
-        resp = self.client.post("/api/auth/logout")
+        resp = self.client.post("/api/auth/logout", headers=self._csrf_header())
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(resp.get_json()["authenticated"])
         self.assertFalse(self.client.get("/api/auth/me").get_json()["authenticated"])
+        # A second logout attempt without the (now cleared) token is rejected.
+        self.assertEqual(self.client.post("/api/auth/logout").status_code, 403)
         # And the protected APIs are closed again after logout.
         self.assertEqual(self.client.get("/api/history").status_code, 401)
 
@@ -258,7 +264,8 @@ class ProtectedApiTests(AuthTestBase):
         scam = ("Earn $9,000 EVERY WEEK working from home! No experience needed. "
                 "Immediate hiring! Just pay a $99 registration fee via Easypaisa. "
                 "Email hiring.manager2024@gmail.com NOW. Act fast!")
-        resp = self.client.post("/api/predict", json={"job_text": scam, "title": "t"})
+        resp = self.client.post("/api/predict", json={"job_text": scam, "title": "t"},
+                                headers=self._csrf_header())
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.get_json()["prediction"], "Scam")
         self.assertEqual(len(self.client.get("/api/history").get_json()), 1)

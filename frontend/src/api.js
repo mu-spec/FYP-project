@@ -5,12 +5,26 @@
 
 const BASE = '/api'
 
+// Milestone 8A.2 — session-bound CSRF token. Kept in module memory only
+// (never localStorage); issued by the server inside the session and echoed
+// back in the X-CSRF-Token header on state-changing calls.
+let csrfToken = null
+
+function authedOptions(options = {}) {
+  if (!csrfToken) return options
+  return {
+    ...options,
+    headers: { ...(options.headers || {}), 'X-CSRF-Token': csrfToken },
+  }
+}
+
 async function handle(res) {
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
     // A 401 from a protected API means the session ended (expired, server
     // restart, logout elsewhere). Let the central auth state react.
     if (res.status === 401) {
+      csrfToken = null
       window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
     }
     const err = new Error(data.error || `Request failed (${res.status})`)
@@ -28,20 +42,20 @@ export async function checkHealth() {
 }
 
 export async function analyzeJob(jobText, title = '') {
-  const res = await fetch(`${BASE}/predict`, {
+  const res = await fetch(`${BASE}/predict`, authedOptions({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ job_text: jobText, title }),
-  })
+  }))
   return handle(res)
 }
 
 export async function analyzeJobUrl(url, title = '') {
-  const res = await fetch(`${BASE}/predict-url`, {
+  const res = await fetch(`${BASE}/predict-url`, authedOptions({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url, title }),
-  })
+  }))
   return handle(res)
 }
 
@@ -51,7 +65,7 @@ export async function getHistory(limit = 50) {
 }
 
 export async function clearHistory() {
-  const res = await fetch(`${BASE}/history`, { method: 'DELETE' })
+  const res = await fetch(`${BASE}/history`, authedOptions({ method: 'DELETE' }))
   return handle(res)
 }
 
@@ -80,7 +94,9 @@ async function handleAuth(res) {
 export async function getCurrentUser() {
   // The startup session check must never throw for the UI gate.
   const res = await fetch(`${BASE}/auth/me`, { credentials: 'include' })
-  return res.json().catch(() => ({ authenticated: false }))
+  const data = await res.json().catch(() => ({ authenticated: false }))
+  csrfToken = (data && data.authenticated && data.csrf_token) || null
+  return data
 }
 
 export async function signUp(name, email, password, confirm) {
@@ -90,7 +106,9 @@ export async function signUp(name, email, password, confirm) {
     credentials: 'include',
     body: JSON.stringify({ name, email, password, confirm }),
   })
-  return handleAuth(res)
+  const data = await handleAuth(res)
+  csrfToken = data.csrf_token || null
+  return data
 }
 
 export async function signIn(email, password) {
@@ -100,13 +118,16 @@ export async function signIn(email, password) {
     credentials: 'include',
     body: JSON.stringify({ email, password }),
   })
-  return handleAuth(res)
+  const data = await handleAuth(res)
+  csrfToken = data.csrf_token || null
+  return data
 }
 
 export async function signOut() {
-  const res = await fetch(`${BASE}/auth/logout`, {
+  const res = await fetch(`${BASE}/auth/logout`, authedOptions({
     method: 'POST',
     credentials: 'include',
-  })
+  }))
+  csrfToken = null
   return res.json().catch(() => ({}))
 }

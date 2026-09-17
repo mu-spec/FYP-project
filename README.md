@@ -191,3 +191,30 @@ blocked, unreachable, non-HTML or content-less pages fail gracefully and ask
 the user to paste the job description instead. Known limits: extraction is
 imperfect for JS-only job boards, bot-protected pages, paywalls and unusual
 markup — for those, Paste Text remains the reliable path.
+🔐 Accounts & per-user data (Milestone 8A)
+JobGuard requires a free account. Sign Up / Sign In are served by a dedicated
+screen; every account is a standard JobGuard user (no role selection yet).
+Passwords are stored only as Werkzeug password hashes — never in plaintext,
+and password hashes are never returned by any API. Sessions are server-side
+Flask session cookies (HttpOnly, SameSite=Lax, Secure when
+JOBGUARD_COOKIE_SECURE=true) — no tokens in localStorage. Set
+JOBGUARD_SECRET_KEY in the environment before running backend/app.py; without
+it the backend falls back to an ephemeral random key (sessions reset on every
+restart), so always set it outside development.
+
+👤 User-specific History & Insights (Milestone 8A.2)
+Every prediction is stored with the signed-in user's id. History and the
+Insights page (which is calculated live from that same History endpoint) are
+strictly per-user: you only ever see, search and delete your own
+analyses, and Clear History removes only your rows. The predictions table was
+migrated in place — a nullable user_id column plus an index were added, old
+rows are preserved but stay invisible (never reassigned) until 8B migrates
+them explicitly.
+
+🛡️ CSRF protection (Milestone 8A.2)
+All authenticated state-changing requests (Analyze text/URL, Clear History,
+Sign Out) must echo the session-bound CSRF token in the X-CSRF-Token header.
+The token is issued inside the session (returned by /api/auth/me and by the
+sign-up/sign-in responses) and is kept in frontend memory only — never in
+localStorage. Missing or invalid tokens are rejected with HTTP 403;
+authentication itself remains purely session-cookie based.
