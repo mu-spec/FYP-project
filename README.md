@@ -230,10 +230,12 @@ authentication itself remains purely session-cookie based.
 🔎 Real Job Discovery (Milestone 8B.1)
 The Jobs page ("Real Job Opportunities") shows real external job postings from
 four official public APIs — Remote OK (https://remoteok.com/api), Arbeitnow
-(https://www.arbeitnow.com/api/job-board-api), Jobicy (https://jobicy.com/api/v2/remote-jobs,
-(https://www.arbeitnow.com/api/job-board-api). No scraping and no API keys are
-used, and job APIs are only ever called by the Flask backend (never from
-React). Postings are normalized into a shared shape (source, source_job_id,
+(https://www.arbeitnow.com/api/job-board-api), Jobicy
+(https://jobicy.com/api/v2/remote-jobs) and Adzuna
+(https://api.adzuna.com/v1/api). No scraping is used; Remote OK, Arbeitnow
+and Jobicy need no keys at all, and Adzuna's optional credentials live only
+in environment variables on the server. Job APIs are only ever called by the
+Flask backend (never from React). Postings are normalized into a shared shape (source, source_job_id,
 title, company, location, description, job_type, remote, tags, salary, job_url,
 published_at, fetched_at — missing fields become null/[] and are never
 invented), stripped of provider HTML before storage, and cached in the
