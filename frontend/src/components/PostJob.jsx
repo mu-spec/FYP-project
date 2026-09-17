@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react'
 import {
   getEmployerProfile, createEmployerProfile, updateEmployerProfile,
   getEmployerJobs, createEmployerJob, updateEmployerJob, deleteEmployerJob,
+  screenEmployerJob, getEmployerJobScreening,
 } from '../api.js'
 import Icon from './Icon.jsx'
 
@@ -292,6 +293,16 @@ function JobForm({ initial, onSubmit, onCancel, saving, fieldErrors, topError })
 /* Main screen                                                         */
 /* ------------------------------------------------------------------ */
 
+function StatusBadge({ status }) {
+  const label = status === 'ready' ? 'Ready' : status === 'flagged' ? 'Flagged' : 'Draft'
+  return (
+    <span className={`status-badge status-${status}`}>
+      <Icon name={status === 'ready' ? 'check' : status === 'flagged' ? 'warning' : 'file'}
+        size={12} strokeWidth={2} /> {label}
+    </span>
+  )
+}
+
 export default function PostJob({ backendUp }) {
   const [profile, setProfile] = useState(null)
   const [jobs, setJobs] = useState(null) // null = not loaded
@@ -309,6 +320,11 @@ export default function PostJob({ backendUp }) {
   const [jobFlash, setJobFlash] = useState('')
   const [detailJob, setDetailJob] = useState(null)
   const [deletingJob, setDeletingJob] = useState(null)
+  // Milestone 8C.3A — safety screening
+  const [screeningBusyId, setScreeningBusyId] = useState(null)
+  const [screeningError, setScreeningError] = useState('')
+  const [reportJob, setReportJob] = useState(null) // job whose report is open
+  const [report, setReport] = useState(null)       // full screening payload
 
   useEffect(() => {
     let active = true
@@ -359,6 +375,35 @@ export default function PostJob({ backendUp }) {
     setFieldErrors({})
     setSavedFlash(false)
     setMode('edit')
+  }
+
+  // Milestone 8C.3A — run the existing JobGuard engine on a draft.
+  const runScreening = async (job) => {
+    setScreeningBusyId(job.id)
+    setScreeningError('')
+    setSavedFlash(false)  // the screening flash replaces any stale profile flash
+    try {
+      const res = await screenEmployerJob(job.id)
+      await refreshJobs()
+      setJobFlash(res.status === 'ready'
+        ? 'Safety check complete — the job is marked Ready.'
+        : 'Safety check complete — the job was Flagged by JobGuard.')
+    } catch (err) {
+      setScreeningError(err.message || 'Could not run the safety check. Please try again.')
+    } finally {
+      setScreeningBusyId(null)
+    }
+  }
+
+  const openReport = async (job) => {
+    setReportJob(job)
+    setReport(null)
+    try {
+      const res = await getEmployerJobScreening(job.id)
+      setReport(res.screening)
+    } catch {
+      setReport(null)
+    }
   }
 
   const openJobForm = (job = null) => {
@@ -534,9 +579,7 @@ export default function PostJob({ backendUp }) {
                   <div className="job-draft-main">
                     <div className="job-draft-title-row">
                       <h3 className="job-draft-title">{job.title}</h3>
-                      <span className="draft-badge">
-                        <Icon name="file" size={12} strokeWidth={2} /> Draft
-                      </span>
+                      <StatusBadge status={job.status} />
                     </div>
                     <ul className="job-meta">
                       <li>📍 {job.location}</li>
@@ -546,14 +589,136 @@ export default function PostJob({ backendUp }) {
                   </div>
                   <div className="job-draft-actions">
                     <button type="button" className="notif-action" onClick={() => setDetailJob(job)}>View</button>
+                    {(job.status === 'flagged' || job.status === 'ready') && (
+                      <button type="button" className="notif-action" onClick={() => openReport(job)}>
+                        View Safety Report
+                      </button>
+                    )}
                     <button type="button" className="notif-action" onClick={() => openJobForm(job)}>Edit</button>
-                    <button type="button" className="notif-action job-draft-delete" onClick={() => setDeletingJob(job)}>Delete</button>
+                    {job.status === 'draft' && (
+                      <button
+                        type="button"
+                        className="notif-action job-screen-action"
+                        disabled={screeningBusyId !== null || backendUp === false}
+                        onClick={() => runScreening(job)}
+                      >
+                        {screeningBusyId === job.id ? 'Checking…' : 'Run Safety Check'}
+                      </button>
+                    )}
+                    {job.status === 'flagged' && (
+                      <button
+                        type="button"
+                        className="notif-action job-screen-action"
+                        disabled={screeningBusyId !== null || backendUp === false}
+                        onClick={() => runScreening(job)}
+                      >
+                        {screeningBusyId === job.id ? 'Checking…' : 'Re-run Safety Check'}
+                      </button>
+                    )}
+                    {job.status === 'draft' && (
+                      <button type="button" className="notif-action job-draft-delete" onClick={() => setDeletingJob(job)}>Delete</button>
+                    )}
                   </div>
                 </article>
               ))}
             </div>
           )}
         </section>
+      )}
+
+      {screeningError && (
+        <section className="jobs-state card-surface jobs-analysis-note" role="alert">
+          <p>{screeningError}</p>
+        </section>
+      )}
+
+      {/* 8C.3A — Safety Report (existing evidence styling, honest wording) */}
+      {reportJob && (
+        <div
+          className="modal-overlay"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setReportJob(null)
+          }}
+        >
+          <div className="modal-card card-surface safety-report" role="dialog" aria-modal="true" aria-label="Safety report">
+            <div className="modal-head">
+              <span className="section-label">Safety Report</span>
+              <button type="button" className="modal-close" aria-label="Close safety report" onClick={() => setReportJob(null)}>
+                <Icon name="close" size={16} strokeWidth={2} />
+              </button>
+            </div>
+            <p className="job-company">{reportJob.title}</p>
+            {!report && <p className="notif-empty">Loading report…</p>}
+            {report && (
+              <>
+                <div className="result-topline">
+                  <div className="result-heading">
+                    <span
+                      className={`verdict-pill ${report.prediction === 'Scam' ? 'scam-pill' : 'legit-pill'}`}
+                    >
+                      {report.prediction}
+                    </span>
+                  </div>
+                  <div className="safety-probs">
+                    <span>Scam probability: <strong>{(report.probability * 100).toFixed(2)}%</strong></span>
+                    <span>Confidence: <strong>{(report.confidence * 100).toFixed(2)}%</strong></span>
+                  </div>
+                </div>
+                {report.prediction === 'Scam' ? (
+                  <p className="safety-banner safety-blocked">
+                    Publishing blocked — edit the job and run the safety check again.
+                  </p>
+                ) : (
+                  <p className="safety-banner safety-passed">
+                    Safety Check Passed — ready for publishing in the next stage.
+                  </p>
+                )}
+                <div className="job-detail-section">
+                  <h3>Red flags ({report.red_flags.length})</h3>
+                  {report.red_flags.length === 0 && (
+                    <p className="job-detail-text">No red flags were detected in this posting.</p>
+                  )}
+                  {report.red_flags.map((flag, i) => (
+                    <article key={i} className={`evidence-card evidence-${(flag.severity || 'Low').toLowerCase()}`}>
+                      <div className="evidence-card-top">
+                        <div className="evidence-category">
+                          <span className="flag-marker"><Icon name="warning" size={15} /></span>
+                          <span>{flag.category}</span>
+                        </div>
+                        <span className={`severity-badge severity-${(flag.severity || 'Low').toLowerCase()}`}>
+                          {flag.severity}
+                        </span>
+                      </div>
+                      <p className="evidence-explanation">{flag.explanation || flag.message}</p>
+                      {Array.isArray(flag.evidence) && flag.evidence.length > 0 && (
+                        <div className="evidence-snippets" aria-label="Matched text from the job description">
+                          {flag.evidence.map((snippet, j) => (
+                            <span key={j} className="evidence-snippet">&ldquo;{snippet}&rdquo;</span>
+                          ))}
+                        </div>
+                      )}
+                    </article>
+                  ))}
+                </div>
+                <p className="postjob-note">
+                  Automated screening only — JobGuard does not verify companies
+                  and no result is a guarantee. Publishing comes in the next stage.
+                </p>
+              </>
+            )}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="jobs-prefs-btn"
+                onClick={() => { const j = reportJob; setReportJob(null); openJobForm(j) }}
+              >
+                <Icon name="file" size={15} strokeWidth={2} /> Edit the Job
+              </button>
+              <button type="button" className="modal-cancel" onClick={() => setReportJob(null)}>Close</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Create / Edit job draft (modal) */}
@@ -601,9 +766,7 @@ export default function PostJob({ backendUp }) {
         >
           <div className="modal-card card-surface job-detail" role="dialog" aria-modal="true" aria-label="Job draft details">
             <div className="modal-head">
-              <span className="draft-badge">
-                <Icon name="file" size={12} strokeWidth={2} /> Status: Draft
-              </span>
+              <StatusBadge status={detailJob.status || 'draft'} />
               <button type="button" className="modal-close" aria-label="Close job details" onClick={() => setDetailJob(null)}>
                 <Icon name="close" size={16} strokeWidth={2} />
               </button>
@@ -651,6 +814,15 @@ export default function PostJob({ backendUp }) {
               >
                 <Icon name="file" size={15} strokeWidth={2} /> Edit Draft
               </button>
+              {detailJob.screening && (
+                <button
+                  type="button"
+                  className="notif-action"
+                  onClick={() => { const j = detailJob; setDetailJob(null); openReport(j) }}
+                >
+                  View Safety Report
+                </button>
+              )}
               <button type="button" className="modal-cancel" onClick={() => setDetailJob(null)}>Close</button>
             </div>
           </div>

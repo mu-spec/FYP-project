@@ -59,6 +59,7 @@ from job_sources import service as job_service
 from job_sources import alerts as job_alerts
 import employer_profiles
 import employer_jobs
+import employer_screening
 from job_sources.matching import APPROVED_SOURCES, MAX_KEYWORDS, MAX_LOCATION
 
 # ------------------------------------------------------------------- Config
@@ -192,6 +193,10 @@ def init_db():
     # Milestone 8C.2 — employer job drafts (separate table from external_jobs;
     # status is always 'draft' in this milestone — publishing comes later).
     employer_jobs.ensure_table(DB_PATH)
+
+    # Milestone 8C.3A — AI safety screenings for employer drafts (own table,
+    # never in the normal predictions/history).
+    employer_screening.ensure_table(DB_PATH)
 
 
 init_db()  # ensure table exists and old databases are migrated at startup
@@ -723,6 +728,77 @@ def delete_employer_job(job_id):
     if not deleted:
         return jsonify({"error": "Job draft not found."}), 404
     return jsonify({"ok": True})
+
+
+@app.post("/api/employer-jobs/<int:job_id>/screen")
+@require_auth
+@require_csrf
+def screen_employer_job(job_id):
+    """Run the EXISTING JobGuard engine on the caller's own draft.
+
+    The screening text is composed from the draft fields plus the employer's
+    company name (empty optionals skipped) and passed unchanged through the
+    same predict_one() path as /api/predict — preprocessing, TF-IDF, 11
+    numeric features, XGBoost, 9 red-flag rules, noisy-OR and the 0.5
+    threshold are all reused; there is no new classifier or threshold.
+
+    Verdict mapping (1:1 with the engine): Legitimate -> 'ready',
+    Scam -> 'flagged'. The screening is stored in its own audit table — it
+    never touches the normal predictions table, so employer screening never
+    appears in History or Insights. Publishing is NOT part of this milestone.
+    Foreign/missing job -> 404.
+    """
+    employer_jobs.ensure_table(DB_PATH)
+    employer_screening.ensure_table(DB_PATH)
+    profile, err = _current_employer_profile()
+    if err:
+        return err
+    job = employer_jobs.get_job(DB_PATH, job_id, profile["id"])
+    if job is None:
+        return jsonify({"error": "Job draft not found."}), 404
+
+    screening_text = employer_screening.compose_screening_text(job, profile)
+    result = predict_one(screening_text, job["title"])  # unchanged existing engine
+
+    new_status = "flagged" if result["prediction"] == "Scam" else "ready"
+    with sqlite3.connect(DB_PATH) as db:
+        db.execute(
+            "UPDATE employer_jobs SET status = ? WHERE id = ? AND employer_profile_id = ?",
+            (new_status, job_id, profile["id"]),
+        )
+        db.commit()
+
+    screening = employer_screening.record_screening(DB_PATH, job_id, result)
+    updated_job = employer_jobs.get_job(DB_PATH, job_id, profile["id"])
+    return jsonify({
+        "job": updated_job,
+        "screening": screening,
+        "status": new_status,
+        "text_chars": len(screening_text),
+    })
+
+
+@app.get("/api/employer-jobs/<int:job_id>/screening")
+@require_auth
+def read_employer_job_screening(job_id):
+    """The latest safety screening (with evidence) for the caller's own job.
+
+    Ownership-scoped like every other employer-jobs route: a foreign job is
+    the same 404, so no screening data of another employer is ever revealed.
+    Read-only, so no CSRF is required.
+    """
+    employer_jobs.ensure_table(DB_PATH)
+    employer_screening.ensure_table(DB_PATH)
+    profile, err = _current_employer_profile()
+    if err:
+        return err
+    job = employer_jobs.get_job(DB_PATH, job_id, profile["id"])
+    if job is None:
+        return jsonify({"error": "Job draft not found."}), 404
+    screening = employer_screening.latest_screening(DB_PATH, job_id)
+    if screening is None:
+        return jsonify({"error": "This job has not been screened yet."}), 404
+    return jsonify({"job_id": job_id, "screening": screening})
 
 
 @app.get("/api/health")

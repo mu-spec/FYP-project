@@ -2147,3 +2147,37 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .job-draft-card { flex-direction: column; align-items: stretch; }
   .job-draft-actions { justify-content: flex-end; }
 }
+
+
+/* ============================================================
+   Milestone 8C.3A — safety screening UI
+   ============================================================ */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: .7188rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.status-draft { border: 1px solid var(--border-strong); color: var(--muted); background: var(--surface-sunken); }
+.status-flagged { border: 1px solid var(--scam-border); color: var(--scam); background: var(--scam-soft); }
+.status-ready { border: 1px solid var(--legit-border); color: var(--legit); background: var(--legit-soft); }
+.job-screen-action { color: var(--primary-bright); }
+.safety-report { width: 620px; }
+.safety-probs { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; color: var(--muted); font-size: .8438rem; }
+.safety-probs strong { color: var(--ink-strong); }
+.safety-banner {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: .875rem;
+  font-weight: 800;
+}
+.safety-blocked { border: 1px solid var(--scam-border); border-left: 4px solid var(--scam); color: var(--scam); background: var(--scam-soft); }
+.safety-passed { border: 1px solid var(--legit-border); border-left: 4px solid var(--legit); color: var(--legit); background: var(--legit-soft); }
+.safety-report .evidence-card { padding: 12px 14px; }

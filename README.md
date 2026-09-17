@@ -330,3 +330,27 @@ no credentials are duplicated into the job record) and a delete confirmation
 the external Jobs feed, job alerts or notifications for other users. There is
 no publish action anywhere in this milestone — publishing comes after the
 JobGuard AI screening stage.
+
+Employer drafts can now be checked by the same JobGuard AI that powers the
+public Analyze flow. "Run Safety Check" on a draft composes one screening text
+from the job fields (Job Title, Company, Location, Job Type, Salary, the
+description, then Requirements, Benefits, Contact Email and Application URL —
+empty optional fields are skipped) and feeds it through the existing prediction
+path unchanged: the same preprocessing, TF-IDF features, 11 numeric signals,
+XGBoost model, 9 red-flag rules, noisy-OR combination and the existing 0.5
+threshold. A Legitimate verdict marks the draft Ready; a Scam verdict marks it
+Flagged. There is no second threshold and no special leniency for registered
+employers — the engine treats a job draft exactly like any pasted listing.
+
+The status (draft / flagged / ready) is decided only by the backend. Any edit
+to a screened job resets it to draft, so results always describe the current
+text; previous screening rows are kept as audit history in the dedicated
+employer_job_screenings table — separate from the public predictions table, so
+screenings never appear in History or Insights. POST
+/api/employer-jobs/<id>/screen and GET /api/employer-jobs/<id>/screening are
+session-authenticated, employer-only, CSRF-protected and user-scoped (another
+employer's job is a plain 404). The Safety Report reuses the Evidence Map
+presentation and states plainly what the check is: automated screening only —
+JobGuard does not verify companies and no result is a guarantee. Flagged jobs
+show "Publishing blocked"; Ready jobs are ready for publishing in the next
+stage. There is still no publish action in this milestone.

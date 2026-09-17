@@ -203,27 +203,62 @@ _JOB_SET = ("title = ?, location = ?, job_type = ?, salary = ?, description = ?,
             " closing_date = ?")
 
 
+# Screening join: latest record per job (audit history kept).
+_SCREENING_JOIN = (
+    " LEFT JOIN employer_job_screenings s"
+    "   ON s.employer_job_id = j.id"
+    "  AND s.id = (SELECT MAX(s2.id) FROM employer_job_screenings s2"
+    "              WHERE s2.employer_job_id = j.id)"
+)
+
+
+def _attach_screening(job_row):
+    job = _row_to_job(job_row)
+    if job_row["scr_prediction"] is None:
+        job["screening"] = None
+    else:
+        job["screening"] = {
+            "prediction": job_row["scr_prediction"],
+            "probability": job_row["scr_probability"],
+            "confidence": job_row["scr_confidence"],
+            "screened_at": job_row["scr_screened_at"],
+        }
+    return job
+
+
 def list_jobs(db_path, employer_profile_id):
-    """The employer's own drafts, newest update first (strictly scoped)."""
+    """The employer's own jobs, newest update first (strictly scoped), each
+    with its latest screening summary (or None when never screened)."""
     with sqlite3.connect(db_path) as db:
         db.row_factory = sqlite3.Row
         rows = db.execute(
-            "SELECT * FROM employer_jobs WHERE employer_profile_id = ?"
-            " ORDER BY updated_at DESC, id DESC",
+            "SELECT j.*, s.prediction AS scr_prediction,"
+            " s.probability AS scr_probability, s.confidence AS scr_confidence,"
+            " s.screened_at AS scr_screened_at"
+            " FROM employer_jobs j" + _SCREENING_JOIN +
+            " WHERE j.employer_profile_id = ?"
+            " ORDER BY j.updated_at DESC, j.id DESC",
             (employer_profile_id,),
         ).fetchall()
-    return [_row_to_job(row) for row in rows]
+    return [_attach_screening(row) for row in rows]
 
 
 def get_job(db_path, job_id, employer_profile_id):
-    """One draft, owned by this employer profile — else None (never leaks)."""
+    """One job, owned by this employer profile — else None (never leaks).
+    Includes the latest screening summary (or None when never screened)."""
     with sqlite3.connect(db_path) as db:
         db.row_factory = sqlite3.Row
         row = db.execute(
-            "SELECT * FROM employer_jobs WHERE id = ? AND employer_profile_id = ?",
+            "SELECT j.*, s.prediction AS scr_prediction,"
+            " s.probability AS scr_probability, s.confidence AS scr_confidence,"
+            " s.screened_at AS scr_screened_at"
+            " FROM employer_jobs j" + _SCREENING_JOIN +
+            " WHERE j.id = ? AND j.employer_profile_id = ?",
             (job_id, employer_profile_id),
         ).fetchone()
-    return _row_to_job(row)
+    if row is None:
+        return None
+    return _attach_screening(row)
 
 
 def create_job(db_path, employer_profile_id, clean):
@@ -251,7 +286,9 @@ def update_job(db_path, job_id, employer_profile_id, clean):
     """Update the employer's own draft in place.
 
     id, employer_profile_id and created_at are preserved; updated_at is
-    refreshed; the status column is never touched (stays 'draft').
+    refreshed. Milestone 8C.3A: ANY edit resets the status to 'draft' — a
+    previously screened (ready/flagged) job must be screened again, since its
+    content changed. Old screening records are kept as audit history.
     Returns None when the draft does not belong to this employer profile.
     """
     with sqlite3.connect(db_path) as db:
@@ -259,6 +296,7 @@ def update_job(db_path, job_id, employer_profile_id, clean):
             f"""
             UPDATE employer_jobs
                SET {_JOB_SET},
+                   status = 'draft',
                    updated_at = ?
              WHERE id = ? AND employer_profile_id = ?
             """,

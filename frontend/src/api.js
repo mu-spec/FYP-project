@@ -260,3 +260,16 @@ export async function deleteEmployerJob(id) {
   }))
   return handle(res)
 }
+
+export async function screenEmployerJob(id) {
+  const res = await fetch(`${BASE}/employer-jobs/${id}/screen`, authedOptions({
+    method: 'POST',
+    credentials: 'include',
+  }))
+  return handle(res)
+}
+
+export async function getEmployerJobScreening(id) {
+  const res = await fetch(`${BASE}/employer-jobs/${id}/screening`, { credentials: 'include' })
+  return handle(res)
+}
