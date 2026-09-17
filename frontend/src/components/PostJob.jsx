@@ -560,7 +560,7 @@ export default function PostJob({ backendUp }) {
             <p className="postjob-flash" role="status">Employer profile saved.</p>
           )}
           <p className="postjob-next">
-            Job publishing will be enabled in the next stage.
+            Ready jobs can be published after passing the AI safety check.
           </p>
         </section>
       )}

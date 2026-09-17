@@ -50,6 +50,8 @@ cd models && python train_model.py
 
 # 2) Backend  →  http://localhost:5000
 cd backend && pip install -r requirements.txt && python app.py
+#    optional but recommended — a stable secret keeps sessions across restarts:
+#    JOBGUARD_SECRET_KEY=<random string> python app.py
 
 # 3) Frontend → http://localhost:5173
 cd frontend && npm install && npm run dev
@@ -377,3 +379,19 @@ Legitimate"). "Analyze with JobGuard" on a public card uses the normal
 analysis flow and creates a normal History record — the employer's private
 pre-publish screening is never reused as user history. Personalized alerts
 are unchanged: they still match external provider jobs only.
+
+⚠️ Limitations
+--------------------------
+- JobGuard is an automated risk SCREEN, not a verification: it estimates how
+  similar a posting is to known scam patterns. A "Legitimate" result is not a
+  guarantee, and a "Scam" result is a strong warning, not proof.
+- Companies are never verified — an employer account only proves someone
+  registered; the AI safety check screens the job TEXT before publishing.
+- Published JobGuard jobs come from self-registered employers; use the same
+  caution you would with any listing (never pay fees, verify independently).
+- OCR quality depends on the screenshot; blurry images are rejected rather
+  than guessed.
+- External job feeds (RemoteOK, Arbeitnow) can be temporarily unreachable —
+  the app then serves its recent cache and says so. JobGuard listings and
+  external listings are stored separately.
+- Alerts are in-app only, by design (no emails are sent).
