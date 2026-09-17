@@ -16,14 +16,23 @@ import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
 
-from . import arbeitnow, remote_ok
+from . import arbeitnow, jobicy, remote_ok
 from .normalize import now_iso, strip_html
 
 PAGE_SIZE = 20
 FRESHNESS = timedelta(minutes=20)     # refresh window (8B.1: 15–30 min)
 PRUNE_AFTER = timedelta(days=3)       # keep the cache bounded
 
-PROVIDERS = {"remoteok": remote_ok, "arbeitnow": arbeitnow}
+# Milestone 8E.1 — per-provider refresh windows. Jobicy asks that their feed
+# not be polled more frequently than once per hour, so their window is 60
+# minutes while Remote OK / Arbeitnow keep the existing 20-minute behavior.
+PROVIDER_FRESHNESS = {
+    "remoteok": FRESHNESS,
+    "arbeitnow": FRESHNESS,
+    "jobicy": timedelta(minutes=60),
+}
+
+PROVIDERS = {"remoteok": remote_ok, "arbeitnow": arbeitnow, "jobicy": jobicy}
 VALID_SOURCES = set(PROVIDERS)
 
 _lock = threading.Lock()
@@ -92,32 +101,54 @@ def _parse_ts(text):
 
 
 def refresh_if_stale(db_path):
-    """Refresh provider data when the cache is older than FRESHNESS.
+    """Refresh each provider whose own cache is older than its freshness window.
 
-    Returns the cache-status dict used in the /api/jobs response. Provider
-    failures are isolated: recorded, never raised.
+    Milestone 8E.1: staleness is evaluated PER PROVIDER (Jobicy is polled at
+    most once per hour, per their guidance; Remote OK / Arbeitnow keep the
+    20-minute window). A fresh provider is never re-fetched just because a
+    sibling expired. Provider failures are isolated: recorded, never raised.
     """
     with _lock:
         with sqlite3.connect(db_path) as db:
             db.row_factory = sqlite3.Row
-            newest = db.execute("SELECT MAX(fetched_at) AS t FROM external_jobs").fetchone()["t"]
-        newest_dt = _parse_ts(newest)
-        cache_fresh = newest_dt is not None and \
-            datetime.now(timezone.utc) - newest_dt.astimezone(timezone.utc) < FRESHNESS
+            last_by_source = {
+                row["source"]: row["t"]
+                for row in db.execute(
+                    "SELECT source, MAX(fetched_at) AS t FROM external_jobs GROUP BY source"
+                )
+            }
+            newest_dt = _parse_ts(
+                db.execute("SELECT MAX(fetched_at) AS t FROM external_jobs").fetchone()["t"]
+            )
+        now = datetime.now(timezone.utc)
+
+        def _is_stale(name):
+            last_dt = _parse_ts(last_by_source.get(name))
+            if last_dt is None:
+                # Provider has no cached rows yet — follow the cache-wide
+                # clock so an absent/empty provider is not re-polled on
+                # every request (it is fetched when the cache itself is stale).
+                last_dt = newest_dt
+            return last_dt is None or \
+                now - last_dt.astimezone(timezone.utc) >= PROVIDER_FRESHNESS[name]
+
+        stale_providers = [name for name in PROVIDERS if _is_stale(name)]
+        cache_fresh = not stale_providers
 
         newly_imported = []
-        if not cache_fresh:
-            for name, provider in PROVIDERS.items():
-                try:
-                    jobs = provider.fetch_jobs()
-                    with sqlite3.connect(db_path) as db:
-                        newly_imported.extend(_upsert_jobs(db, jobs))
-                        cutoff = (datetime.now(timezone.utc) - PRUNE_AFTER).isoformat()
-                        db.execute("DELETE FROM external_jobs WHERE fetched_at < ?", (cutoff,))
-                        db.commit()
-                    _last_refresh["ok"][name] = True
-                except Exception:
-                    _last_refresh["ok"][name] = False  # keep previous rows
+        for name in stale_providers:
+            provider = PROVIDERS[name]
+            try:
+                jobs = provider.fetch_jobs()
+                with sqlite3.connect(db_path) as db:
+                    newly_imported.extend(_upsert_jobs(db, jobs))
+                    cutoff = (datetime.now(timezone.utc) - PRUNE_AFTER).isoformat()
+                    db.execute("DELETE FROM external_jobs WHERE fetched_at < ?", (cutoff,))
+                    db.commit()
+                _last_refresh["ok"][name] = True
+            except Exception:
+                _last_refresh["ok"][name] = False  # keep previous rows
+        if stale_providers:
             _last_refresh["at"] = now_iso()
 
             # Milestone 8B.2 — after a successful (partial counts too) import,

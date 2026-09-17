@@ -34,7 +34,7 @@ from unittest import mock
 from uuid import uuid4
 
 from auth_test_utils import signup_and_login
-from job_sources import arbeitnow, remote_ok, service
+from job_sources import arbeitnow, jobicy, remote_ok, service
 
 INTERNAL_KEYS = {"source", "source_job_id", "title", "company", "location",
                  "description", "job_type", "remote", "tags", "salary",
@@ -235,10 +235,13 @@ class CacheTests(unittest.TestCase):
                                        title="Cached Remote Job", tags=[])])
         self._make_cache_stale(self.db_path)  # fresh seed would skip the refresh
 
-        with mock.patch.object(remote_ok.requests, "get",
+        an_job = dict(arbeitnow.normalize(ARBEITNOW_RAW["data"][0]))
+        with mock.patch.object(remote_ok, "fetch_jobs",
                                side_effect=Exception("RemoteOK down")), \
-             mock.patch.object(arbeitnow.requests, "get",
-                               return_value=FakeResponse(ARBEITNOW_RAW)):
+             mock.patch.object(arbeitnow, "fetch_jobs",
+                               return_value=[an_job]), \
+             mock.patch.object(jobicy, "fetch_jobs",
+                               side_effect=Exception("Jobicy down")):
             status = service.refresh_if_stale(self.db_path)
 
         self.assertFalse(status["providers"]["remoteok"]["ok"])
@@ -252,8 +255,9 @@ class CacheTests(unittest.TestCase):
         # inside the mocks: the sandbox has live internet, so an unpatched
         # call would really hit the providers)
         self._make_cache_stale(self.db_path)  # re-stale so the retry really runs
-        with mock.patch.object(remote_ok.requests, "get", side_effect=Exception("x")), \
-             mock.patch.object(arbeitnow.requests, "get", side_effect=Exception("y")):
+        with mock.patch.object(remote_ok, "fetch_jobs", side_effect=Exception("x")), \
+             mock.patch.object(arbeitnow, "fetch_jobs", side_effect=Exception("y")), \
+             mock.patch.object(jobicy, "fetch_jobs", side_effect=Exception("z")):
             service._last_refresh = {"at": None, "ok": {n: None for n in service.PROVIDERS}}
             status = service.refresh_if_stale(self.db_path)
             self.assertTrue(status["stale"])
@@ -266,20 +270,23 @@ class CacheTests(unittest.TestCase):
                                        title="Cached", tags=[])])
         service.refresh_if_stale(self.db_path)  # marks cache fresh
         with mock.patch.object(remote_ok.requests, "get", side_effect=AssertionError("refetched!")) as m1, \
-             mock.patch.object(arbeitnow.requests, "get", side_effect=AssertionError("refetched!")) as m2:
+             mock.patch.object(arbeitnow.requests, "get", side_effect=AssertionError("refetched!")) as m2, \
+             mock.patch.object(jobicy.requests, "get", side_effect=AssertionError("refetched!")) as m3:
             service.refresh_if_stale(self.db_path)
             service.get_jobs(self.db_path)
         m1.assert_not_called()
         m2.assert_not_called()
+        m3.assert_not_called()
 
     def test_stale_cache_triggers_refresh(self):
         old = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
         _seed_rows(self.db_path, [dict(source="remoteok", source_job_id="old-1",
                                        title="Old Row", tags=[], fetched_at=old)])
-        with mock.patch.object(remote_ok.requests, "get",
-                               return_value=FakeResponse(REMOTEOK_RAW)), \
-             mock.patch.object(arbeitnow.requests, "get",
-                               return_value=FakeResponse(ARBEITNOW_RAW)):
+        an_job = dict(arbeitnow.normalize(ARBEITNOW_RAW["data"][0]))
+        rk_jobs = [j for j in (remote_ok.normalize(e) for e in REMOTEOK_RAW) if j]
+        with mock.patch.object(remote_ok, "fetch_jobs", return_value=rk_jobs), \
+             mock.patch.object(arbeitnow, "fetch_jobs", return_value=[an_job]), \
+             mock.patch.object(jobicy, "fetch_jobs", return_value=[]):
             service.refresh_if_stale(self.db_path)
         with sqlite3.connect(self.db_path) as db:
             n = db.execute("SELECT COUNT(*) FROM external_jobs").fetchone()[0]
@@ -324,7 +331,7 @@ class JobsApiTests(unittest.TestCase):
         self.assertEqual(data["page"], 2)
         self.assertEqual(data["total"], 25)
         self.assertEqual(data["pages"], 2)
-        self.assertEqual(data["cache"]["sources"], ["remoteok", "arbeitnow"])
+        self.assertEqual(data["cache"]["sources"], ["remoteok", "arbeitnow", "jobicy"])
         self.assertEqual(len(data["jobs"]), 5)
         self.assertIn("cache", data)
         job = data["jobs"][0]

@@ -109,7 +109,7 @@ class EmployerJobsSchemaTests(unittest.TestCase):
     def test_employer_drafts_never_enter_external_feed_or_alerts(self):
         import employer_jobs
         from unittest import mock
-        from job_sources import service, remote_ok, arbeitnow
+        from job_sources import service, remote_ok, arbeitnow, jobicy
         saved = dict(service._last_refresh, ok=dict(service._last_refresh["ok"]))
         service._last_refresh = {"at": None, "ok": {n: None for n in service.PROVIDERS}}
         clean, _ = employer_jobs.validate_job_data(dict(VALID))
@@ -118,7 +118,8 @@ class EmployerJobsSchemaTests(unittest.TestCase):
             # providers mocked empty: no live network, feed stays empty and
             # the employer draft must not appear in it either way
             with mock.patch.object(remote_ok, "fetch_jobs", return_value=[]), \
-                 mock.patch.object(arbeitnow, "fetch_jobs", return_value=[]):
+                 mock.patch.object(arbeitnow, "fetch_jobs", return_value=[]), \
+                 mock.patch.object(jobicy, "fetch_jobs", return_value=[]):
                 result = service.get_jobs(self.db_path)
         finally:
             service._last_refresh = saved

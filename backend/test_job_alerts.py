@@ -248,8 +248,10 @@ class AlertGenerationTests(unittest.TestCase):
         remoteok, arbeitnow_jobs = self._normalized_fixtures()
         import job_sources.remote_ok as remote_ok_mod
         import job_sources.arbeitnow as arbeitnow_mod
+        import job_sources.jobicy as jobicy_mod
         with mock.patch.object(remote_ok_mod, "fetch_jobs", return_value=remoteok), \
-             mock.patch.object(arbeitnow_mod, "fetch_jobs", return_value=arbeitnow_jobs):
+             mock.patch.object(arbeitnow_mod, "fetch_jobs", return_value=arbeitnow_jobs), \
+             mock.patch.object(jobicy_mod, "fetch_jobs", return_value=[]):
             return service.refresh_if_stale(self.db_path)
 
     def test_notifications_generated_for_matching_users_only(self):
