@@ -1573,12 +1573,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .page-subtitle { margin: 0; color: var(--muted); font-size: 1rem; }
 
 .jobs-toolbar { padding: var(--space-4); margin-bottom: var(--space-4); }
+/* Milestone 8E.4 — two-row filter grid: Search + Location on top,
+   Category / Work Mode / Job Type / Source below. */
 .jobs-toolbar-fields {
   display: grid;
-  grid-template-columns: 2fr 1.2fr 1fr auto;
+  grid-template-columns: repeat(4, 1fr);
   gap: var(--space-3);
   align-items: end;
 }
+.jobs-field-search, .jobs-field-location { grid-column: span 2; }
 .jobs-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .jobs-field label { color: var(--muted); font-size: .75rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
 .jobs-field input,
@@ -1595,6 +1598,64 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .jobs-field input:focus-visible, .jobs-field select:focus-visible {
   outline: none;
   border-color: rgba(225, 131, 63, .65);
+  box-shadow: 0 0 0 3px rgba(225, 131, 63, .16);
+}
+/* Milestone 8E.4 — active-filter chips + Clear Filters (compact, inline). */
+.jobs-active-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+.jobs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--ink);
+  font-size: .78rem;
+  font-weight: 700;
+}
+.jobs-chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.jobs-chip-x:hover { color: var(--ink-strong); }
+.jobs-chip-x:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(225, 131, 63, .16);
+  color: var(--ink-strong);
+}
+.jobs-clear-btn {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--primary);
+  font-size: .78rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.jobs-clear-btn:hover { color: var(--primary-bright); }
+.jobs-clear-btn:focus-visible {
+  outline: none;
   box-shadow: 0 0 0 3px rgba(225, 131, 63, .16);
 }
 .jobs-remote-toggle { display: flex; align-items: center; gap: 8px; padding: 11px 2px; color: var(--ink); font-size: .875rem; cursor: pointer; }
@@ -1629,7 +1690,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   gap: var(--space-3);
 }
 
-.job-card { display: flex; flex-direction: column; gap: 10px; padding: var(--space-4); }
+.job-card { display: flex; flex-direction: column; gap: 10px; padding: var(--space-4); overflow-wrap: anywhere; }
 .job-card-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .job-source-badge {
   display: inline-flex;
@@ -1708,6 +1769,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 @media (max-width: 500px) {
   .jobs-toolbar-fields { grid-template-columns: 1fr; }
+  /* span-2 fields must collapse with the single column, or the grid would
+     create an implicit second track and overflow the viewport. */
+  .jobs-field-search, .jobs-field-location { grid-column: auto; }
 }
 .jobs-analysis-note { margin-bottom: var(--space-3); border-left: 3px solid var(--caution); text-align: left; }
 
@@ -1887,7 +1951,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   font-weight: 700;
 }
 .prefs-error { margin: 0; color: var(--scam); font-size: .8125rem; font-weight: 700; }
-.job-detail { width: 640px; }
+.job-detail { width: 640px; overflow-wrap: anywhere; }
 .job-detail .job-title { font-size: 1.1875rem; }
 .job-detail-desc {
   margin: 0;

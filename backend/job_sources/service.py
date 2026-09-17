@@ -17,6 +17,8 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 from . import adzuna, arbeitnow, jobicy, remote_ok, upwork
+from .classify import (VALID_CATEGORIES, VALID_JOB_TYPES, VALID_WORK_MODES,
+                       classify_fields, enrich_job)
 from .normalize import now_iso, strip_html
 
 PAGE_SIZE = 20
@@ -45,6 +47,42 @@ _lock = threading.Lock()
 _last_refresh = {"at": None, "ok": {name: None for name in PROVIDERS}}
 
 
+def ensure_classification_columns(db_path):
+    """Milestone 8E.4 — unified filter columns on the cached feed.
+
+    Idempotent in-place migration: adds `category`, `work_mode` and
+    `normalized_job_type` to `external_jobs` when missing (databases created
+    before 8E.4), then backfills rows that have no category yet. Nothing is
+    ever deleted: existing rows keep every value; the deterministic
+    classifier fills the new fields from the already-stored job text.
+    """
+    import json as _json
+    with sqlite3.connect(db_path) as db:
+        cols = {row[1] for row in db.execute("PRAGMA table_info(external_jobs)")}
+        for col in ("category", "work_mode", "normalized_job_type"):
+            if col not in cols:
+                db.execute(f"ALTER TABLE external_jobs ADD COLUMN {col} TEXT")
+        pending = db.execute(
+            "SELECT id, source, title, description, job_type, remote, tags_json"
+            " FROM external_jobs WHERE category IS NULL"
+        ).fetchall()
+        for row in pending:
+            try:
+                tags = _json.loads(row[6] or "[]")
+            except ValueError:
+                tags = []
+            category, work_mode, job_type_norm = classify_fields(
+                title=row[2], tags=tags, description=row[3],
+                job_type=row[4], remote=bool(row[5]), source=row[1],
+            )
+            db.execute(
+                "UPDATE external_jobs SET category = ?, work_mode = ?,"
+                " normalized_job_type = ? WHERE id = ?",
+                (category, work_mode, job_type_norm, row[0]),
+            )
+        db.commit()
+
+
 def _upsert_jobs(db, jobs):
     """Insert new jobs / refresh existing ones on UNIQUE(source, source_job_id).
 
@@ -59,17 +97,21 @@ def _upsert_jobs(db, jobs):
     }
     rows = []
     for job in jobs:
-        row = dict(job)
+        # Milestone 8E.4 — every provider row flows through the same
+        # deterministic classifier before it is cached.
+        row = enrich_job(job)
         row["tags_json"] = _json.dumps(row.pop("tags", []), ensure_ascii=False)
         rows.append(row)
     db.executemany(
         """
         INSERT INTO external_jobs (
             source, source_job_id, title, company, location, description,
-            job_type, remote, tags_json, salary, job_url, published_at, fetched_at
+            job_type, remote, tags_json, salary, job_url, published_at,
+            fetched_at, category, work_mode, normalized_job_type
         ) VALUES (:source, :source_job_id, :title, :company, :location,
                   :description, :job_type, :remote, :tags_json, :salary,
-                  :job_url, :published_at, :fetched_at)
+                  :job_url, :published_at, :fetched_at, :category,
+                  :work_mode, :normalized_job_type)
         ON CONFLICT(source, source_job_id) DO UPDATE SET
             title=excluded.title,
             company=excluded.company,
@@ -81,7 +123,10 @@ def _upsert_jobs(db, jobs):
             salary=excluded.salary,
             job_url=excluded.job_url,
             published_at=excluded.published_at,
-            fetched_at=excluded.fetched_at
+            fetched_at=excluded.fetched_at,
+            category=excluded.category,
+            work_mode=excluded.work_mode,
+            normalized_job_type=excluded.normalized_job_type
         """,
         rows,
     )
@@ -93,7 +138,7 @@ def _upsert_jobs(db, jobs):
                 "SELECT id FROM external_jobs WHERE source = ? AND source_job_id = ?",
                 key,
             ).fetchone()
-            fresh = dict(job)
+            fresh = enrich_job(dict(job))
             fresh["id"] = row_id["id"]
             new_jobs.append(fresh)
     return new_jobs
@@ -198,12 +243,18 @@ def refresh_if_stale(db_path):
 
 
 def get_jobs(db_path, q=None, location=None, source=None, remote=False, page=1,
-             limit=None):
+             limit=None, category=None, work_mode=None, job_type=None):
     """Deterministic, filtered, paginated job list for GET /api/jobs.
 
     `limit` (Milestone 8C.3B) overrides the page size for a single call —
     used by the merged public feed to fetch all matching external rows before
     combining them with published JobGuard jobs. Default keeps 8B.1 behavior.
+
+    Milestone 8E.4 — `category`, `work_mode` and `job_type` join the filter
+    set (AND semantics with the existing parameters). Recognized values are
+    the canonical slugs from job_sources.classify; unknown/blank values are
+    ignored so they never silently empty the feed. Work-mode unknowns
+    (NULL) only ever surface when no explicit mode is requested.
     """
     cache = refresh_if_stale(db_path)
 
@@ -220,6 +271,15 @@ def get_jobs(db_path, q=None, location=None, source=None, remote=False, page=1,
         params.append(source)
     if remote:
         where.append("remote = 1")
+    if category in VALID_CATEGORIES:
+        where.append("category = ?")
+        params.append(category)
+    if work_mode in VALID_WORK_MODES:
+        where.append("work_mode = ?")
+        params.append(work_mode)
+    if job_type in VALID_JOB_TYPES:
+        where.append("normalized_job_type = ?")
+        params.append(job_type)
     clause = f"WHERE {' AND '.join(where)}" if where else ""
 
     with sqlite3.connect(db_path) as db:
@@ -228,7 +288,8 @@ def get_jobs(db_path, q=None, location=None, source=None, remote=False, page=1,
         offset = (max(1, page) - 1) * PAGE_SIZE
         rows = db.execute(
             f"""SELECT id, source, source_job_id, title, company, location, description,
-                       job_type, remote, tags_json, salary, job_url, published_at, fetched_at
+                       job_type, remote, tags_json, salary, job_url, published_at, fetched_at,
+                       category, work_mode, normalized_job_type
                 FROM external_jobs {clause}
                 ORDER BY published_at DESC, id DESC
                 LIMIT ? OFFSET ?""",

@@ -138,12 +138,18 @@ export async function signOut() {
 // Milestone 8B.1 — real job discovery (server-cached external sources).
 // ---------------------------------------------------------------------------
 
-export async function getJobs({ q = '', location = '', source = '', remote = false, page = 1 } = {}) {
+export async function getJobs({ q = '', location = '', source = '', remote = false,
+                                category = '', work_mode = '', job_type = '',
+                                page = 1 } = {}) {
   const params = new URLSearchParams()
   if (q) params.set('q', q)
   if (location) params.set('location', location)
   if (source) params.set('source', source)
   if (remote) params.set('remote', 'true')
+  // Milestone 8E.4 — unified Category / Work Mode / Job Type filters.
+  if (category) params.set('category', category)
+  if (work_mode) params.set('work_mode', work_mode)
+  if (job_type) params.set('job_type', job_type)
   params.set('page', String(page))
   const res = await fetch(`${BASE}/jobs?${params.toString()}`, { credentials: 'include' })
   return handle(res)

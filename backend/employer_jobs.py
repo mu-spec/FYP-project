@@ -355,13 +355,23 @@ def publish_job(db_path, job_id, employer_profile_id, published_at):
         return cursor.rowcount > 0
 
 
-def public_listings(db_path, q=None, location=None, remote=False):
+def public_listings(db_path, q=None, location=None, remote=False,
+                    category=None, work_mode=None, job_type=None):
     """Published employer jobs in the public Jobs-page normalized shape.
 
     ONLY status='published' rows leave this module — draft/flagged/ready are
     never exposed. The table stays separate from external_jobs (nothing is
     copied into it). Company always comes from the employer profile.
+
+    Milestone 8E.4 — each published listing flows through the SAME
+    deterministic classifier as external providers (category / work_mode /
+    normalized_job_type computed from the stored text, never stored), and the
+    optional unified-filter arguments apply the same AND semantics. The
+    arguments are read-path only: creating, editing, screening and publishing
+    jobs are untouched.
     """
+    from job_sources.classify import classify_fields
+
     where = ["j.status = 'published'"]
     params = []
     if q:
@@ -390,7 +400,15 @@ def public_listings(db_path, q=None, location=None, remote=False):
         ).fetchall()
     listings = []
     for row in rows:
-        listings.append({
+        # The long-standing JobGuard work flag stays exactly as it was
+        # (type text contains "remote"); the classifier may only ADD the
+        # conservative work_mode field, never change this flag.
+        work_flag = "remote" in (row["job_type"] or "").lower()
+        job_category, job_work_mode, job_type_norm = classify_fields(
+            title=row["title"], tags=[], description=row["description"],
+            job_type=row["job_type"], remote=work_flag, source="jobguard",
+        )
+        listing = {
             "id": row["id"],
             "source": "jobguard",
             "source_job_id": str(row["id"]),
@@ -399,7 +417,7 @@ def public_listings(db_path, q=None, location=None, remote=False):
             "location": row["location"],
             "description": row["description"],
             "job_type": row["job_type"],
-            "remote": "remote" in (row["job_type"] or "").lower(),
+            "remote": work_flag,
             "tags": [],
             "salary": row["salary"],
             "job_url": None,
@@ -407,5 +425,17 @@ def public_listings(db_path, q=None, location=None, remote=False):
             "fetched_at": None,
             "requirements": row["requirements"],
             "benefits": row["benefits"],
-        })
+            "category": job_category,
+            "work_mode": job_work_mode,
+            "normalized_job_type": job_type_norm,
+        }
+        # Unified filter contract (8E.4) — AND semantics, applied on the
+        # computed fields so employer rows match the external behavior.
+        if category and listing["category"] != category:
+            continue
+        if work_mode and listing["work_mode"] != work_mode:
+            continue
+        if job_type and listing["normalized_job_type"] != job_type:
+            continue
+        listings.append(listing)
     return listings

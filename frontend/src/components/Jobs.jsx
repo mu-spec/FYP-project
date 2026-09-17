@@ -10,9 +10,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getJobs, getJobPreferences, saveJobPreferences } from '../api.js'
+import {
+  SOURCE_LABELS, CATEGORY_OPTIONS, WORK_MODE_OPTIONS, JOB_TYPE_OPTIONS,
+  DEFAULT_FILTERS, buildJobsQuery, activeFilterChips, hasActiveFilters,
+} from '../filters.js'
 import Icon from './Icon.jsx'
-
-const SOURCE_LABELS = { remoteok: 'Remote OK', arbeitnow: 'Arbeitnow', jobicy: 'Jobicy', adzuna: 'Adzuna', upwork: 'Upwork', jobguard: 'JobGuard' }
 
 function formatDate(iso) {
   if (!iso) return null
@@ -37,7 +39,9 @@ function alertsSummary(prefs) {
 }
 
 export default function Jobs({ onAnalyzeJob, backendUp, focusJob, onClearFocus }) {
-  const [filters, setFilters] = useState({ q: '', location: '', source: '', remote: false })
+  // Milestone 8E.4 — unified filters replace the single "Remote only"
+  // checkbox: Search, Location, Category, Work Mode, Job Type, Source.
+  const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [applied, setApplied] = useState(filters)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -62,12 +66,14 @@ export default function Jobs({ onAnalyzeJob, backendUp, focusJob, onClearFocus }
     return () => clearTimeout(debounceRef.current)
   }, [filters])
 
-  const load = useCallback(async (params, page = 1) => {
+  const load = useCallback(async (filterState, page = 1) => {
     const requestId = ++requestRef.current
     setLoading(true)
     setError('')
     try {
-      const result = await getJobs({ ...params, page })
+      // Milestone 8E.4 — filter state is mapped to canonical API params in
+      // one place (filters.js); empty/Any values are simply omitted.
+      const result = await getJobs({ ...buildJobsQuery(filterState), page })
       if (requestId !== requestRef.current) return // a newer request superseded this one
       setData(result)
     } catch (err) {
@@ -135,6 +141,13 @@ export default function Jobs({ onAnalyzeJob, backendUp, focusJob, onClearFocus }
     setFilters((f) => ({ ...f, [key]: value }))
   }
 
+  // Milestone 8E.4 — chips + Clear Filters (only while a filter is active).
+  const clearOneFilter = (key) => {
+    setFilters((f) => ({ ...f, [key]: DEFAULT_FILTERS[key] }))
+  }
+  const clearAllFilters = () => setFilters(DEFAULT_FILTERS)
+  const chips = activeFilterChips(filters)
+
   const jobs = data?.jobs ?? []
   const cache = data?.cache
   const degraded = cache && Object.values(cache.providers || {}).some((p) => p.ok === false)
@@ -169,7 +182,7 @@ export default function Jobs({ onAnalyzeJob, backendUp, focusJob, onClearFocus }
               onChange={setFilter('q')}
             />
           </div>
-          <div className="jobs-field">
+          <div className="jobs-field jobs-field-location">
             <label htmlFor="jobs-location">Location</label>
             <input
               id="jobs-location"
@@ -178,6 +191,35 @@ export default function Jobs({ onAnalyzeJob, backendUp, focusJob, onClearFocus }
               value={filters.location}
               onChange={setFilter('location')}
             />
+          </div>
+          {/* Milestone 8E.4 — unified Category / Work Mode / Job Type filters.
+              The old "Remote only" checkbox became the Work Mode dropdown. */}
+          <div className="jobs-field">
+            <label htmlFor="jobs-category">Category</label>
+            <select id="jobs-category" value={filters.category} onChange={setFilter('category')}>
+              <option value="">Any Category</option>
+              {CATEGORY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="jobs-field">
+            <label htmlFor="jobs-workmode">Work Mode</label>
+            <select id="jobs-workmode" value={filters.workMode} onChange={setFilter('workMode')}>
+              <option value="">Any</option>
+              {WORK_MODE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="jobs-field">
+            <label htmlFor="jobs-jobtype">Job Type</label>
+            <select id="jobs-jobtype" value={filters.jobType} onChange={setFilter('jobType')}>
+              <option value="">Any Type</option>
+              {JOB_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
           </div>
           <div className="jobs-field">
             <label htmlFor="jobs-source">Source</label>
@@ -191,14 +233,27 @@ export default function Jobs({ onAnalyzeJob, backendUp, focusJob, onClearFocus }
               <option value="arbeitnow">Arbeitnow</option>
             </select>
           </div>
-          <div className="jobs-field jobs-field-remote">
-            <label htmlFor="jobs-remote">Remote only</label>
-            <label className="jobs-remote-toggle">
-              <input id="jobs-remote" type="checkbox" checked={filters.remote} onChange={setFilter('remote')} />
-              <span>Remote positions only</span>
-            </label>
-          </div>
         </div>
+        {hasActiveFilters(filters) && (
+          <div className="jobs-active-chips" aria-label="Active filters">
+            {chips.map((chip) => (
+              <span key={chip.key} className="jobs-chip">
+                {chip.label}
+                <button
+                  type="button"
+                  className="jobs-chip-x"
+                  aria-label={`Remove ${chip.label} filter`}
+                  onClick={() => clearOneFilter(chip.key)}
+                >
+                  <Icon name="close" size={11} strokeWidth={2.5} />
+                </button>
+              </span>
+            ))}
+            <button type="button" className="jobs-clear-btn" onClick={clearAllFilters}>
+              Clear Filters
+            </button>
+          </div>
+        )}
         {cache && (
           <div className="jobs-cache-meta">
             {degraded && (

@@ -178,9 +178,17 @@ def init_db():
                 job_url       TEXT,
                 published_at  TEXT,
                 fetched_at    TEXT    NOT NULL,
+                category      TEXT,
+                work_mode     TEXT,
+                normalized_job_type TEXT,
                 UNIQUE(source, source_job_id)
             )
         """)
+        # Milestone 8E.4 — unified Category / Work Mode / Job Type filters:
+        # deterministic classifier columns + one-time backfill of rows cached
+        # before this milestone (idempotent; databases created fresh above
+        # already have the columns and an empty backfill).
+        job_service.ensure_classification_columns(DB_PATH)
 
     # Milestone 8B.2 — per-user preferences + in-app notifications.
     job_alerts.ensure_tables(DB_PATH)
@@ -441,6 +449,10 @@ def list_jobs():
     location = (request.args.get("location") or "").strip()[:100]
     source = (request.args.get("source") or "").strip().lower()
     remote = request.args.get("remote", "").lower() == "true"
+    # Milestone 8E.4 — unified filters; unknown values are ignored server-side.
+    category = (request.args.get("category") or "").strip().lower()
+    work_mode = (request.args.get("work_mode") or "").strip().lower()
+    job_type = (request.args.get("job_type") or "").strip().lower()
     try:
         page = max(1, int(request.args.get("page", 1)))
     except ValueError:
@@ -453,7 +465,10 @@ def list_jobs():
     if source == "jobguard":
         listings = employer_jobs.public_listings(DB_PATH, q=q or None,
                                                  location=location or None,
-                                                 remote=remote)
+                                                 remote=remote,
+                                                 category=category or None,
+                                                 work_mode=work_mode or None,
+                                                 job_type=job_type or None)
         total = len(listings)
         start = (page - 1) * job_service.PAGE_SIZE
         return jsonify({
@@ -470,6 +485,8 @@ def list_jobs():
         DB_PATH, q=q or None, location=location or None,
         source=source or None, remote=remote, page=1,
         limit=10 ** 6 if fetch_all else None,
+        category=category or None, work_mode=work_mode or None,
+        job_type=job_type or None,
     )
     if not fetch_all:
         # explicit external provider filter (or remote-only): 8B.1 behavior
@@ -477,7 +494,10 @@ def list_jobs():
 
     external_jobs = result["jobs"]
     guard_jobs = employer_jobs.public_listings(DB_PATH, q=q or None,
-                                               location=location or None)
+                                               location=location or None,
+                                               category=category or None,
+                                               work_mode=work_mode or None,
+                                               job_type=job_type or None)
     combined = sorted(
         external_jobs + guard_jobs,
         key=lambda j: ((j.get("published_at") or ""), j.get("id") or 0),

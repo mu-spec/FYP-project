@@ -247,7 +247,8 @@ and Jobicy need no keys at all, while Adzuna's and Upwork's optional
 credentials live only in environment variables on the server. Job APIs are
 only ever called by the Flask backend (never from React). Postings are normalized into a shared shape (source, source_job_id,
 title, company, location, description, job_type, remote, tags, salary, job_url,
-published_at, fetched_at — missing fields become null/[] and are never
+published_at, fetched_at, plus the Milestone 8E.4 filter fields category,
+work_mode and normalized_job_type — missing fields become null/[] and are never
 invented), stripped of provider HTML before storage, and cached in the
 external_jobs SQLite table with UNIQUE(source, source_job_id). The cache
 refreshes at most once every 20 minutes; if one provider fails the other's
@@ -257,7 +258,16 @@ raw provider errors.
 
 GET /api/jobs (authenticated; anonymous requests get 401) accepts q, location,
 source and remote=true filters plus page-based pagination (20 per page) and
-returns normalized jobs plus cache metadata. Every card visibly names its
+returns normalized jobs plus cache metadata. Since Milestone 8E.4 the Jobs
+page also has unified Category / Work Mode / Job Type dropdowns (replacing the
+single "Remote only" checkbox) with AND-combinable category=, work_mode= and
+job_type= query parameters; assignments come from a deterministic,
+transparent keyword mapper over each posting's title, tags, provider category
+and description — never from an ML model — and unknown work modes / job types
+are never invented (they simply only appear under "Any"). Active filters show
+as compact chips with a Clear Filters action, and the same filtering contract
+covers all six sources (published JobGuard jobs included).
+Every card visibly names its
 source ("Source: Remote OK" / "Source: Arbeitnow" / "Source: Jobicy") and links
 back to the
 original listing (Remote OK jobs always link to their remoteok.com URL, as
