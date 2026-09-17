@@ -131,3 +131,18 @@ export async function signOut() {
   csrfToken = null
   return res.json().catch(() => ({}))
 }
+
+// ---------------------------------------------------------------------------
+// Milestone 8B.1 — real job discovery (server-cached external sources).
+// ---------------------------------------------------------------------------
+
+export async function getJobs({ q = '', location = '', source = '', remote = false, page = 1 } = {}) {
+  const params = new URLSearchParams()
+  if (q) params.set('q', q)
+  if (location) params.set('location', location)
+  if (source) params.set('source', source)
+  if (remote) params.set('remote', 'true')
+  params.set('page', String(page))
+  const res = await fetch(`${BASE}/jobs?${params.toString()}`, { credentials: 'include' })
+  return handle(res)
+}

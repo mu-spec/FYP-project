@@ -55,6 +55,7 @@ from nlp_pipeline import (NUMERIC_FEATURES, clean_text, detect_red_flags,
 from input_validation import REJECT_MESSAGE, validate_job_text
 import url_fetcher
 from url_fetcher import UrlFetchError, analyze_url
+from job_sources import service as job_service
 
 # ------------------------------------------------------------------- Config
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
@@ -151,6 +152,28 @@ def init_db():
                 password_hash TEXT NOT NULL,
                 created_at    TEXT NOT NULL,
                 last_login_at TEXT
+            )
+        """)
+        # Milestone 8B.1 — cached external job postings (Real Job Discovery).
+        # DB-backed cache of the two approved public job APIs, normalized to
+        # the internal shape; UNIQUE(source, source_job_id) deduplicates.
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS external_jobs (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                source        TEXT    NOT NULL,
+                source_job_id TEXT    NOT NULL,
+                title         TEXT    NOT NULL,
+                company       TEXT,
+                location      TEXT,
+                description   TEXT,
+                job_type      TEXT,
+                remote        INTEGER NOT NULL DEFAULT 0,
+                tags_json     TEXT,
+                salary        TEXT,
+                job_url       TEXT,
+                published_at  TEXT,
+                fetched_at    TEXT    NOT NULL,
+                UNIQUE(source, source_job_id)
             )
         """)
 
@@ -381,6 +404,30 @@ def _store_history(result: dict, user_id=None) -> None:
          user_id),
     )
     db.commit()
+
+@app.get("/api/jobs")
+@require_auth
+def list_jobs():
+    """Milestone 8B.1 — real external job discovery (cached, read-only).
+
+    Query params: q, location, source (remoteok|arbeitnow), remote=true, page.
+    Jobs come from the DB-backed cache in external_jobs; providers are
+    refreshed server-side only when stale (20-minute window), with per-provider
+    failure isolation and stale-cache fallback.
+    """
+    q = (request.args.get("q") or "").strip()[:100]
+    location = (request.args.get("location") or "").strip()[:100]
+    source = (request.args.get("source") or "").strip().lower()
+    remote = request.args.get("remote", "").lower() == "true"
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except ValueError:
+        page = 1
+    return jsonify(job_service.get_jobs(
+        DB_PATH, q=q or None, location=location or None,
+        source=source or None, remote=remote, page=page,
+    ))
+
 
 @app.get("/api/health")
 def health():

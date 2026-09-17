@@ -6,6 +6,7 @@ import Analyze from './components/Analyze.jsx'
 import History from './components/History.jsx'
 import Insights from './components/Insights.jsx'
 import About from './components/About.jsx'
+import Jobs from './components/Jobs.jsx'
 import AuthScreen from './components/AuthScreen.jsx'
 import Icon from './components/Icon.jsx'
 import { AuthProvider, useAuth } from './AuthContext.jsx'
@@ -19,7 +20,7 @@ import {
   OCR_FAILURE_MESSAGE,
 } from './lib/ocrText.js'
 
-const PAGES = new Set(['home', 'analyze', 'history', 'insights', 'about'])
+const PAGES = new Set(['home', 'analyze', 'jobs', 'history', 'insights', 'about'])
 
 function initialPage() {
   const hash = window.location.hash.replace('#', '')
@@ -171,6 +172,14 @@ function JobGuardApp({ user, onSignOut }) {
     runPrediction(jobText, title, { fromHome: true })
   }
 
+  // Milestone 8B.1 — "Analyze with JobGuard" on the Jobs page. The external
+  // listing goes through the EXISTING one-click pipeline (shared in-flight
+  // gate, validator, XGBoost/rules engine, per-user history) — no second
+  // classifier and no special scoring for external jobs.
+  function handleExternalJobAnalyze(jobText, title) {
+    return runPrediction(jobText, title, { fromHome: true })
+  }
+
   // Milestone 7B — URL analysis. Shares the in-flight gate and navigation
   // version with the text flow, so a double-click cannot create a second
   // prediction and a pending request can never overwrite a chosen page.
@@ -287,6 +296,7 @@ function JobGuardApp({ user, onSignOut }) {
           ocrInfo={ocrInfo}
         />
       )}
+      {page === 'jobs' && <Jobs onAnalyzeJob={handleExternalJobAnalyze} backendUp={backendUp} />}
       {page === 'history' && <History backendUp={backendUp} refreshKey={historyKey} />}
       {page === 'insights' && <Insights backendUp={backendUp} onNavigate={navigate} />}
       {page === 'about' && <About />}
