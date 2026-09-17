@@ -2038,3 +2038,112 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .postjob-form-grid { grid-template-columns: 1fr; }
   .postjob-summary-grid { grid-template-columns: 1fr; }
 }
+
+/* ============================================================
+   Milestone 8C.2 — employer job drafts (My Job Posts)
+   (approved espresso/orange tokens only)
+   ============================================================ */
+.postjob-head-actions { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.postjob-create-btn { padding: 9px 16px; }
+
+.postjob-myjobs { max-width: 720px; margin-top: var(--space-4); }
+.postjob-myjobs-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+.postjob-myjobs-head h2 {
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: 1.1875rem;
+}
+.postjob-empty { padding: var(--space-5); text-align: center; color: var(--muted); }
+.postjob-empty p { margin: 0; }
+
+.postjob-jobs-list { display: flex; flex-direction: column; gap: 10px; }
+.job-draft-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  flex-wrap: wrap;
+}
+.job-draft-main { min-width: 0; flex: 1 1 260px; }
+.job-draft-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.job-draft-title {
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+.draft-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--surface-sunken);
+  font-size: .7188rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.job-draft-card .job-meta { margin-top: 6px; }
+.job-draft-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding-top: var(--space-2);
+}
+.job-draft-delete { color: var(--scam); }
+.job-draft-delete:hover { color: var(--scam); text-decoration: underline; }
+
+.postjob-delete-dialog { width: 400px; }
+.postjob-delete-dialog h2 { margin: 0; color: var(--ink-strong); font-size: 1.125rem; }
+.postjob-delete-btn {
+  padding: 9px 16px;
+  border: 1px solid var(--scam-border);
+  border-radius: 10px;
+  color: var(--scam);
+  background: var(--scam-soft);
+  font-size: .8438rem;
+  font-weight: 800;
+}
+.postjob-delete-btn:hover, .postjob-delete-btn:focus-visible { border-color: var(--scam); }
+
+.job-detail-section { display: flex; flex-direction: column; gap: 6px; }
+.job-detail-section h3 {
+  margin: 0;
+  color: var(--muted-light);
+  font-size: .7188rem;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.job-detail-text {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-sunken);
+  color: var(--ink);
+  font-size: .8438rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.job-detail dd a { overflow-wrap: anywhere; }
+
+@media (max-width: 768px) {
+  .job-draft-card { flex-direction: column; align-items: stretch; }
+  .job-draft-actions { justify-content: flex-end; }
+}

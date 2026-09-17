@@ -58,6 +58,7 @@ from url_fetcher import UrlFetchError, analyze_url
 from job_sources import service as job_service
 from job_sources import alerts as job_alerts
 import employer_profiles
+import employer_jobs
 from job_sources.matching import APPROVED_SOURCES, MAX_KEYWORDS, MAX_LOCATION
 
 # ------------------------------------------------------------------- Config
@@ -187,6 +188,10 @@ def init_db():
     # credentials stored; an extension of the existing account, not a
     # second authentication system).
     employer_profiles.ensure_table(DB_PATH)
+
+    # Milestone 8C.2 — employer job drafts (separate table from external_jobs;
+    # status is always 'draft' in this milestone — publishing comes later).
+    employer_jobs.ensure_table(DB_PATH)
 
 
 init_db()  # ensure table exists and old databases are migrated at startup
@@ -607,6 +612,117 @@ def update_employer_profile():
     if err == "missing":
         return jsonify({"error": "No employer profile to update. Please register first."}), 404
     return _employer_payload_response(profile)
+
+
+# ---------------------------------------------------------------------------
+# Milestone 8C.2 — employer job drafts (create/edit/delete/manage; the status
+# is ALWAYS 'draft' here — publishing belongs to a later milestone)
+# ---------------------------------------------------------------------------
+
+def _current_employer_profile():
+    """(profile, error_response): the caller must have an employer profile."""
+    profile = employer_profiles.get_profile(DB_PATH, _current_user_row()["id"])
+    if profile is None:
+        return None, (jsonify({
+            "error": "An employer profile is required. Please register as an employer first.",
+        }), 403)
+    return profile, None
+
+
+@app.get("/api/employer-jobs")
+@require_auth
+def list_employer_jobs():
+    """The caller's own job drafts, newest update first."""
+    employer_jobs.ensure_table(DB_PATH)
+    profile, err = _current_employer_profile()
+    if err:
+        return err
+    jobs = employer_jobs.list_jobs(DB_PATH, profile["id"])
+    return jsonify({"jobs": jobs, "count": len(jobs)})
+
+
+@app.post("/api/employer-jobs")
+@require_auth
+@require_csrf
+def create_employer_job():
+    """Create a job draft for the signed-in employer.
+
+    Validation errors return 400 with a field_errors map. The status is set
+    to 'draft' by the backend and any client-supplied status value is ignored
+    — it can never be 'published' through this endpoint.
+    """
+    employer_jobs.ensure_table(DB_PATH)
+    profile, err = _current_employer_profile()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        data = {}
+    clean, field_errors = employer_jobs.validate_job_data(data)
+    if field_errors:
+        return jsonify({
+            "error": next(iter(field_errors.values())),
+            "field_errors": field_errors,
+        }), 400
+    job = employer_jobs.create_job(DB_PATH, profile["id"], clean)
+    return jsonify({"job": job}), 201
+
+
+@app.get("/api/employer-jobs/<int:job_id>")
+@require_auth
+def read_employer_job(job_id):
+    """One of the caller's drafts. Another employer's id is a plain 404 —
+    identical to a missing row, so no ownership information is revealed."""
+    employer_jobs.ensure_table(DB_PATH)
+    profile, err = _current_employer_profile()
+    if err:
+        return err
+    job = employer_jobs.get_job(DB_PATH, job_id, profile["id"])
+    if job is None:
+        return jsonify({"error": "Job draft not found."}), 404
+    return jsonify({"job": job})
+
+
+@app.put("/api/employer-jobs/<int:job_id>")
+@require_auth
+@require_csrf
+def update_employer_job(job_id):
+    """Edit the caller's own draft in place (id, employer_profile_id and
+    created_at preserved; updated_at refreshed; status stays 'draft').
+    A foreign or missing id is the same 404."""
+    employer_jobs.ensure_table(DB_PATH)
+    profile, err = _current_employer_profile()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        data = {}
+    clean, field_errors = employer_jobs.validate_job_data(data)
+    if field_errors:
+        return jsonify({
+            "error": next(iter(field_errors.values())),
+            "field_errors": field_errors,
+        }), 400
+    job = employer_jobs.update_job(DB_PATH, job_id, profile["id"], clean)
+    if job is None:
+        return jsonify({"error": "Job draft not found."}), 404
+    return jsonify({"job": job})
+
+
+@app.delete("/api/employer-jobs/<int:job_id>")
+@require_auth
+@require_csrf
+def delete_employer_job(job_id):
+    """Delete the caller's own draft. A foreign or missing id is the same
+    404, and deleting never touches another employer's rows."""
+    employer_jobs.ensure_table(DB_PATH)
+    profile, err = _current_employer_profile()
+    if err:
+        return err
+    deleted = employer_jobs.delete_job(DB_PATH, job_id, profile["id"])
+    if not deleted:
+        return jsonify({"error": "Job draft not found."}), 404
+    return jsonify({"ok": True})
 
 
 @app.get("/api/health")

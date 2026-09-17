@@ -298,3 +298,35 @@ one user can never read or modify another user's employer profile. Before
 registration the Post a Job screen shows "Become an Employer"; after
 registration it shows the employer summary ("Employer profile ready") with
 edit support, and notes that job publishing will be enabled in the next stage.
+
+📝 Employer Job Drafts (Milestone 8C.2)
+Registered employers (users with an employer profile) can create and manage
+their own job advertisements from the Post a Job screen: "Create Job Post"
+opens a draft form (Job Title, Location, Job Type from a fixed list — Full
+Time, Part Time, Contract, Internship, Temporary, Other — Salary/Compensation
+optional, Job Description, Requirements, Benefits optional, Contact Email,
+Application URL optional and HTTP/HTTPS-only, Closing Date optional and
+validated). Everything is trimmed and length-capped and validated on both the
+client and the server; nothing is invented — optional fields stay empty. The
+description requires real content (at least 30 characters) so the JobGuard AI
+analysis of a later stage has substance to work with.
+
+Drafts are stored in the dedicated employer_jobs table — completely separate
+from the external_jobs cache — with indexes on employer_profile_id, status and
+created_at. Every created job has status='draft': the status is decided by the
+backend and cannot be chosen or forced by the client. Authenticated endpoints:
+GET /api/employer-jobs (own drafts, newest update first), POST
+/api/employer-jobs, GET/PUT/DELETE /api/employer-jobs/<id> (POST/PUT/DELETE
+require the X-CSRF-Token header). Every read, update and delete is scoped
+through the authenticated user's employer profile — another employer's draft
+id is a plain 404, identical to a missing row, so no ownership information is
+revealed. A signed-in account without an employer profile is rejected (403).
+
+The Post a Job screen shows "Create Job Post" plus a "My Job Posts" list
+(title, location, job type, Draft badge, last updated) with View / Edit /
+Delete per draft, a read-only detail view (company from the employer profile —
+no credentials are duplicated into the job record) and a delete confirmation
+("This action cannot be undone."). Drafts are private: they never appear in
+the external Jobs feed, job alerts or notifications for other users. There is
+no publish action anywhere in this milestone — publishing comes after the
+JobGuard AI screening stage.

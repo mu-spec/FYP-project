@@ -222,3 +222,41 @@ export async function updateEmployerProfile(payload) {
   }))
   return handle(res)
 }
+
+export async function getEmployerJobs() {
+  const res = await fetch(`${BASE}/employer-jobs`, { credentials: 'include' })
+  return handle(res)
+}
+
+export async function createEmployerJob(payload) {
+  const res = await fetch(`${BASE}/employer-jobs`, authedOptions({
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }))
+  return handle(res)
+}
+
+export async function getEmployerJob(id) {
+  const res = await fetch(`${BASE}/employer-jobs/${id}`, { credentials: 'include' })
+  return handle(res)
+}
+
+export async function updateEmployerJob(id, payload) {
+  const res = await fetch(`${BASE}/employer-jobs/${id}`, authedOptions({
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }))
+  return handle(res)
+}
+
+export async function deleteEmployerJob(id) {
+  const res = await fetch(`${BASE}/employer-jobs/${id}`, authedOptions({
+    method: 'DELETE',
+    credentials: 'include',
+  }))
+  return handle(res)
+}
