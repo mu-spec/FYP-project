@@ -154,6 +154,10 @@ export default function Jobs({ onAnalyzeJob, backendUp, focusJob, onClearFocus }
 
   return (
     <main className="page-shell jobs-page">
+      {/* Milestone UI-A — every Jobs section (intro, toolbar, states, cards,
+          pagination) shares the global content container for consistent
+          left/right breathing room. Fixed-position modals are unaffected. */}
+      <div className="container-wide">
       <section className="page-intro jobs-intro-row">
         <div>
           <p className="eyebrow"><span className="eyebrow-line" /> REAL JOB DISCOVERY</p>
@@ -517,6 +521,7 @@ export default function Jobs({ onAnalyzeJob, backendUp, focusJob, onClearFocus }
           </div>
         </div>
       )}
+      </div>{/* /.container-wide */}
     </main>
   )
 }

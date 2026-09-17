@@ -485,6 +485,9 @@ export default function PostJob({ backendUp }) {
 
   return (
     <main className="page-shell postjob-page">
+      {/* Milestone UI-A — heading, employer card, My Job Posts and forms all
+          share the global content container (fixed-position modals unaffected). */}
+      <div className="container-wide">
       <section className="page-intro">
         <p className="eyebrow"><span className="eyebrow-line" /> EMPLOYER WORKSPACE</p>
         <h1>Post a Job</h1>
@@ -922,6 +925,7 @@ export default function PostJob({ backendUp }) {
           </div>
         </div>
       )}
+      </div>{/* /.container-wide */}
     </main>
   )
 }
