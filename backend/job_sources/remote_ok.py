@@ -21,6 +21,11 @@ HEADERS = {
 TIMEOUT = (5, 15)  # (connect, read) seconds
 
 
+def is_configured():
+    """remote_ok needs no credentials — always available."""
+    return True
+
+
 def normalize(element, fetched_at=None):
     """One RemoteOK payload element -> internal normalized job shape."""
     if not isinstance(element, dict):

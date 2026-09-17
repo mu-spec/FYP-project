@@ -61,6 +61,11 @@ def _format_salary(element):
     return salary
 
 
+def is_configured():
+    """jobicy needs no credentials — always available."""
+    return True
+
+
 def normalize(element, fetched_at=None):
     """One Jobicy payload element -> internal normalized job shape."""
     if not isinstance(element, dict):

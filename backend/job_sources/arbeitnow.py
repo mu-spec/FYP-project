@@ -14,6 +14,11 @@ HEADERS = {"User-Agent": "JobGuard-FYP/1.0 (educational job-scam screening)", "A
 TIMEOUT = (5, 15)  # (connect, read) seconds
 
 
+def is_configured():
+    """arbeitnow needs no credentials — always available."""
+    return True
+
+
 def normalize(element, fetched_at=None):
     """One Arbeitnow payload element -> internal normalized job shape."""
     if not isinstance(element, dict):

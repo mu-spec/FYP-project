@@ -16,7 +16,7 @@ import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
 
-from . import arbeitnow, jobicy, remote_ok
+from . import adzuna, arbeitnow, jobicy, remote_ok
 from .normalize import now_iso, strip_html
 
 PAGE_SIZE = 20
@@ -30,9 +30,12 @@ PROVIDER_FRESHNESS = {
     "remoteok": FRESHNESS,
     "arbeitnow": FRESHNESS,
     "jobicy": timedelta(minutes=60),
+    # 30 min sits comfortably inside Adzuna's free daily call quota
+    "adzuna": FRESHNESS,
 }
 
-PROVIDERS = {"remoteok": remote_ok, "arbeitnow": arbeitnow, "jobicy": jobicy}
+PROVIDERS = {"remoteok": remote_ok, "arbeitnow": arbeitnow, "jobicy": jobicy,
+             "adzuna": adzuna}
 VALID_SOURCES = set(PROVIDERS)
 
 _lock = threading.Lock()
@@ -138,6 +141,11 @@ def refresh_if_stale(db_path):
         newly_imported = []
         for name in stale_providers:
             provider = PROVIDERS[name]
+            if not provider.is_configured():
+                # Milestone 8E.2 — a provider without its credentials (e.g.
+                # Adzuna env vars absent) is SKIPPED, not failed: other
+                # providers keep working and the UI shows no degraded banner.
+                continue
             try:
                 jobs = provider.fetch_jobs()
                 with sqlite3.connect(db_path) as db:
