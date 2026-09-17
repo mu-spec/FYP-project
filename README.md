@@ -228,6 +228,21 @@ migrated in place — a nullable user_id column plus an index were added, old
 rows are preserved but stay invisible (never reassigned) until 8B migrates
 them explicitly.
 
+📊 Insights analytics dashboard (Milestones 7E + 8F.1)
+The Insights screen is a per-user analytics dashboard computed live from that
+user's History records only (never another user's, never global, never fake
+or demo data). It keeps the four KPI cards (total analyses, flagged as scam,
+looked legitimate, average decision confidence — same formulas as before) and
+renders three real charts built with Recharts: a Verdict Distribution donut
+(scam coral / legitimate sage, total analyses in the center, hover + keyboard
+tooltip), an Analysis Confidence Trend area chart (one point per saved
+record, oldest → newest), and a Most Common Warning Signs horizontal bar
+chart (counts aggregated from the saved Evidence Maps, highest first,
+severity always shown as text). Recent analyses remain a list. Empty history
+shows a friendly empty state instead of empty charts, and one or two records
+render cleanly with no invented points. The charts are a visualization of
+the same numbers — they never influence detection.
+
 🛡️ CSRF protection (Milestone 8A.2)
 All authenticated state-changing requests (Analyze text/URL, Clear History,
 Sign Out) must echo the session-bound CSRF token in the X-CSRF-Token header.
