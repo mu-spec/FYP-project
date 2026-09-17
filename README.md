@@ -58,6 +58,15 @@ cd backend && pip install -r requirements.txt && python app.py
 #    ADZUNA_APP_ID=<your id> ADZUNA_APP_KEY=<your key> python app.py
 #    ADZUNA_COUNTRY defaults to "gb" (Adzuna's jobs index is per-country);
 #    keep credentials out of git — environment variables only.
+#
+#    Optional — Upwork job source (8E.3) via the official GraphQL API. It
+#    needs an approved Upwork developer application (jobs read scope) and is
+#    skipped entirely when unconfigured. Environment variables only:
+#    UPWORK_ACCESS_TOKEN=<token>            (required to enable Upwork)
+#    UPWORK_REFRESH_TOKEN=<refresh token>   (optional; enables silent refresh)
+#    UPWORK_CLIENT_ID=<id>                  (required with a refresh token)
+#    UPWORK_CLIENT_SECRET=<secret>          (required with a refresh token)
+#    Tokens are held in process memory only and never logged or committed.
 
 # 3) Frontend → http://localhost:5173
 cd frontend && npm install && npm run dev
@@ -229,13 +238,14 @@ authentication itself remains purely session-cookie based.
 
 🔎 Real Job Discovery (Milestone 8B.1)
 The Jobs page ("Real Job Opportunities") shows real external job postings from
-four official public APIs — Remote OK (https://remoteok.com/api), Arbeitnow
+five official public APIs — Remote OK (https://remoteok.com/api), Arbeitnow
 (https://www.arbeitnow.com/api/job-board-api), Jobicy
-(https://jobicy.com/api/v2/remote-jobs) and Adzuna
-(https://api.adzuna.com/v1/api). No scraping is used; Remote OK, Arbeitnow
-and Jobicy need no keys at all, and Adzuna's optional credentials live only
-in environment variables on the server. Job APIs are only ever called by the
-Flask backend (never from React). Postings are normalized into a shared shape (source, source_job_id,
+(https://jobicy.com/api/v2/remote-jobs), Adzuna (https://api.adzuna.com/v1/api)
+and Upwork (https://api.upwork.com/graphql — official GraphQL marketplace
+search only, never page scraping). No scraping is used; Remote OK, Arbeitnow
+and Jobicy need no keys at all, while Adzuna's and Upwork's optional
+credentials live only in environment variables on the server. Job APIs are
+only ever called by the Flask backend (never from React). Postings are normalized into a shared shape (source, source_job_id,
 title, company, location, description, job_type, remote, tags, salary, job_url,
 published_at, fetched_at — missing fields become null/[] and are never
 invented), stripped of provider HTML before storage, and cached in the
