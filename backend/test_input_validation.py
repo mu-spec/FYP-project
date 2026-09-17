@@ -21,6 +21,7 @@ import json
 import unittest
 from unittest import mock
 
+from auth_test_utils import signup_and_login
 from input_validation import REJECT_MESSAGE, validate_job_text
 
 # ---------------------------------------------------------------------------
@@ -123,7 +124,8 @@ class ApiBehaviourTests(unittest.TestCase):
     def setUpClass(cls):
         import app
         cls.app_module = app
-        cls.client = app.app.test_client()
+        # 8A.1: the API now requires a session — sign the test client in.
+        cls.client, cls.test_email = signup_and_login(cls.app_module)
 
     def _post(self, text):
         return self.client.post(

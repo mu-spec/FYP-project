@@ -1390,3 +1390,176 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .insights-grid { grid-template-columns: 1fr; }
   .recent-conf { display: none; }
 }
+
+/* ============================================================
+   Milestone 8A.1 — Authentication screen, session splash,
+   and the navbar user menu. Espresso + Burnt Orange tokens only.
+   ============================================================ */
+.auth-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5) var(--space-3);
+}
+
+.auth-card {
+  width: min(100%, 460px);
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--surface-soft) 0%, var(--surface) 58%);
+  box-shadow: var(--shadow-md);
+}
+
+.auth-brand { display: flex; align-items: center; gap: 11px; margin-bottom: var(--space-4); }
+.auth-brand .brand-copy strong { color: var(--ink-strong); font-size: 1.05rem; }
+.auth-brand .brand-copy span { color: var(--muted-light); font-size: .7rem; }
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+}
+
+.auth-tab {
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  font-size: .875rem;
+  font-weight: 700;
+  transition: color .18s ease, background .18s ease;
+}
+.auth-tab:hover { color: var(--ink); }
+.auth-tab.active { color: #140f0c; background: var(--primary); }
+
+.auth-form { display: flex; flex-direction: column; gap: var(--space-3); }
+
+.auth-field { display: flex; flex-direction: column; gap: 6px; }
+.auth-field label { color: var(--muted); font-size: .78rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.auth-field input {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--ink-strong);
+  background: var(--surface-sunken);
+  font-size: .9375rem;
+}
+.auth-field input::placeholder { color: var(--muted-light); }
+.auth-field input:focus-visible {
+  outline: none;
+  border-color: rgba(225, 131, 63, .65);
+  box-shadow: 0 0 0 3px rgba(225, 131, 63, .16);
+}
+.auth-field input[aria-invalid="true"] { border-color: rgba(230, 109, 109, .65); }
+
+.auth-field-error { margin: 0; color: var(--scam); font-size: .8rem; }
+.auth-hint { margin: 0; color: var(--muted-light); font-size: .78rem; }
+.auth-form-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--scam);
+  border-radius: 6px;
+  color: var(--scam);
+  background: var(--scam-soft);
+  font-size: .85rem;
+}
+
+.auth-submit { width: 100%; margin-top: var(--space-1); padding: 13px 20px; font-size: .9375rem; }
+
+.auth-footnote { margin: var(--space-4) 0 0; color: var(--muted-light); font-size: .8rem; line-height: 1.5; }
+
+/* Minimal branded splash — the ONLY thing shown while the session check runs */
+.auth-splash {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  color: var(--muted);
+  font-size: .9rem;
+}
+
+/* Navbar user control: "Model ready   Name ▾" */
+.user-menu { position: relative; }
+.user-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 210px;
+  padding: 7px 10px 7px 7px;
+  border: 1px solid rgba(20, 15, 12, .22);
+  border-radius: 999px;
+  color: #33180a;
+  background: rgba(255, 244, 232, .16);
+  font-size: .8125rem;
+  font-weight: 700;
+  transition: background .18s ease;
+}
+.user-menu-btn:hover { background: rgba(255, 244, 232, .3); }
+.user-avatar {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #8a4520;
+  background: #fff4e8;
+  font-size: .72rem;
+  font-weight: 700;
+}
+.user-menu-name { overflow: hidden; max-width: 120px; text-overflow: ellipsis; white-space: nowrap; }
+.user-caret { font-size: .6rem; line-height: 1; }
+
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: 230px;
+  padding: 12px 14px;
+  border: 1px solid #765747;
+  border-radius: 12px;
+  background: #2e211a;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, .5);
+}
+.user-dropdown-name { color: var(--ink-strong); font-size: .875rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-dropdown-email { margin-top: 2px; color: var(--muted-light); font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-signout {
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border: 1px solid rgba(225, 131, 63, .55);
+  border-radius: 9px;
+  color: var(--primary-bright);
+  background: transparent;
+  font-size: .8125rem;
+  font-weight: 700;
+  transition: background .18s ease, color .18s ease;
+}
+.user-signout:hover { color: #140f0c; background: var(--primary); }
+
+@media (max-width: 760px) {
+  .user-menu-btn { max-width: 150px; }
+  .user-menu-name { max-width: 74px; }
+  .user-dropdown { width: 210px; }
+}
+
+/* 8A.1: with the user control in the header, the single-row header no longer
+   fits tablets — wrap the nav onto its own row from 880px down (same pattern
+   as the approved ≤760px layout, orange divider included). */
+@media (max-width: 880px) {
+  .header-inner { flex-wrap: wrap; gap: 11px 18px; padding-top: 13px; padding-bottom: 10px; }
+  .main-nav { order: 3; width: 100%; margin-left: 0; overflow-x: auto; justify-content: flex-start; border-top: 1px solid #e1935e; }
+  .nav-link.active::after { bottom: 1px; }
+  .service-status { margin-left: auto; min-width: 0; }
+}

@@ -18,11 +18,24 @@ POST   /api/predict-url -> {url} -> fetches the PUBLIC page (SSRF-protected,
 GET    /api/history   -> last N predictions (PRD 5.7)
 DELETE /api/history   -> clear prediction history
 
+Milestone 8A.1 — Authentication (session-cookie based)
+------------------------------------------------------
+POST   /api/auth/signup -> {name, email, password[, confirm]} -> creates the
+                          account (Werkzeug password hash) and signs in
+POST   /api/auth/login  -> {email, password} -> generic error on failure
+POST   /api/auth/logout -> destroys the server session
+GET    /api/auth/me     -> {authenticated, user?} for the startup session check
+GET    /api/health stays public; /api/predict, /api/predict-url and
+/api/history (GET/DELETE) require an authenticated session (HTTP 401).
+
 Run:  python app.py          (http://localhost:5000)
 """
 
+import functools
 import json
 import os
+import re
+import secrets
 import sqlite3
 import sys
 import time
@@ -30,9 +43,10 @@ from datetime import datetime, timezone
 
 import joblib
 import numpy as np
-from flask import Flask, g, jsonify, request
+from flask import Flask, g, jsonify, request, session
 from flask_cors import CORS
 from scipy.sparse import csr_matrix, hstack
+from werkzeug.security import check_password_hash, generate_password_hash
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from nlp_pipeline import (NUMERIC_FEATURES, clean_text, detect_red_flags,
@@ -52,6 +66,23 @@ DB_PATH      = os.path.join(BASE_DIR, "predictions.db")
 
 app = Flask(__name__)
 CORS(app)  # allow React dev server (localhost:5173) during development
+
+# ---------------------------------------------- Session/auth configuration
+# Milestone 8A.1. The secret key NEVER lives in the repository: it comes from
+# the JOBGUARD_SECRET_KEY environment variable. Without it the app falls back
+# to an ephemeral random key so local development still works (sessions reset
+# on every restart until the variable is set).
+_secret_key = os.environ.get("JOBGUARD_SECRET_KEY", "").strip()
+if not _secret_key:
+    _secret_key = secrets.token_hex(32)
+    print("⚠️  JOBGARD_SECRET_KEY not set — using an ephemeral random key "
+          "(sessions reset on restart). Set the env var for stable sessions.")
+app.config["SECRET_KEY"] = _secret_key
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+# Production-aware: set JOBGUARD_COOKIE_SECURE=true when serving over HTTPS.
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get(
+    "JOBGUARD_COOKIE_SECURE", "").strip().lower() in {"1", "true", "yes"}
 
 # ------------------------------------------------------- Load model artifacts
 model = vectorizer = metadata = None
@@ -96,8 +127,154 @@ def init_db():
         columns = {row[1] for row in db.execute("PRAGMA table_info(predictions)")}
         if "evidence_json" not in columns:
             db.execute("ALTER TABLE predictions ADD COLUMN evidence_json TEXT")
+        # Milestone 8A.1 — application users (never part of the prediction
+        # schema). Only the Werkzeug hash is stored, never a plaintext
+        # password and never a password hash in any API response.
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                name          TEXT NOT NULL,
+                email         TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                created_at    TEXT NOT NULL,
+                last_login_at TEXT
+            )
+        """)
 
 init_db()  # ensure table exists and old databases are migrated at startup
+
+# ------------------------------------------------------- Authentication 8A.1
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+def _normalize_email(raw):
+    """Lowercase/trim an email so comparison and storage are normalized."""
+    return raw.strip().lower() if isinstance(raw, str) else ""
+
+def _password_problems(password):
+    """Return a list of human-readable failures for a candidate password."""
+    problems = []
+    if not isinstance(password, str) or len(password) < 8:
+        problems.append("Password must be at least 8 characters long.")
+        return problems
+    if not re.search(r"[A-Z]", password):
+        problems.append("Password must contain at least one uppercase letter.")
+    if not re.search(r"[a-z]", password):
+        problems.append("Password must contain at least one lowercase letter.")
+    if not re.search(r"[0-9]", password):
+        problems.append("Password must contain at least one number.")
+    return problems
+
+def _public_user(row):
+    """The ONLY user shape ever returned by the API (never the hash)."""
+    return {"id": row["id"], "name": row["name"], "email": row["email"]}
+
+def _current_user_row():
+    """Resolve the session identity to a users row, or None."""
+    user_id = session.get("user_id")
+    if not isinstance(user_id, int):
+        return None
+    row = get_db().execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    if row is None:
+        session.clear()  # stale session (user row vanished) — drop it
+    return row
+
+def require_auth(view):
+    """Server-side gate for protected APIs. Anonymous calls get HTTP 401."""
+    @functools.wraps(view)
+    def wrapped(*args, **kwargs):
+        if _current_user_row() is None:
+            return jsonify({
+                "error": "Authentication required. Please sign in.",
+                "authenticated": False,
+            }), 401
+        return view(*args, **kwargs)
+    return wrapped
+
+@app.post("/api/auth/signup")
+def auth_signup():
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        data = {}
+
+    name = (data.get("name") or "").strip() if isinstance(data.get("name"), str) else ""
+    email = _normalize_email(data.get("email"))
+    password = data.get("password")
+    confirm = data.get("confirm")
+
+    field_errors = {}
+    if not name:
+        field_errors["name"] = "Please enter your full name."
+    elif len(name) > 120:
+        field_errors["name"] = "Name is too long (max 120 characters)."
+    if not email or not _EMAIL_RE.match(email) or len(email) > 200:
+        field_errors["email"] = "Please enter a valid email address."
+    pw_problems = _password_problems(password)
+    if pw_problems:
+        field_errors["password"] = " ".join(pw_problems)
+    if confirm is not None and confirm != password:
+        field_errors["confirm"] = "Passwords do not match."
+    if field_errors:
+        return jsonify({
+            "error": next(iter(field_errors.values())),
+            "field_errors": field_errors,
+        }), 400
+
+    if get_db().execute("SELECT 1 FROM users WHERE email = ?", (email,)).fetchone():
+        return jsonify({
+            "error": "An account with this email already exists.",
+            "field": "email",
+            "field_errors": {"email": "An account with this email already exists."},
+        }), 409
+
+    now = datetime.now(timezone.utc).isoformat()
+    cur = get_db().execute(
+        "INSERT INTO users (name, email, password_hash, created_at, last_login_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (name, email, generate_password_hash(password), now, now),
+    )
+    get_db().commit()
+    session.clear()
+    session["user_id"] = cur.lastrowid
+    row = get_db().execute("SELECT * FROM users WHERE id = ?", (cur.lastrowid,)).fetchone()
+    return jsonify({"authenticated": True, "user": _public_user(row)}), 201
+
+@app.post("/api/auth/login")
+def auth_login():
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        data = {}
+    email = _normalize_email(data.get("email"))
+    password = data.get("password")
+
+    generic = {"error": "Invalid email or password."}
+    if not email or not isinstance(password, str):
+        return jsonify(generic), 401
+    row = get_db().execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+    # Same generic response whether the email exists or the password is wrong,
+    # so the endpoint never reveals which emails are registered.
+    if row is None or not check_password_hash(row["password_hash"], password):
+        return jsonify(generic), 401
+
+    get_db().execute(
+        "UPDATE users SET last_login_at = ? WHERE id = ?",
+        (datetime.now(timezone.utc).isoformat(), row["id"]),
+    )
+    get_db().commit()
+    session.clear()
+    session["user_id"] = row["id"]
+    return jsonify({"authenticated": True, "user": _public_user(row)})
+
+@app.post("/api/auth/logout")
+def auth_logout():
+    session.clear()
+    return jsonify({"authenticated": False})
+
+@app.get("/api/auth/me")
+def auth_me():
+    row = _current_user_row()
+    if row is None:
+        return jsonify({"authenticated": False})
+    return jsonify({"authenticated": True, "user": _public_user(row)})
 
 # --------------------------------------------------------------- Prediction
 def build_features(raw_text: str):
@@ -175,6 +352,7 @@ def health():
     })
 
 @app.post("/api/predict")
+@require_auth
 def predict():
     if model is None:
         return jsonify({"error": "Model not trained. Run models/train_model.py first."}), 503
@@ -212,6 +390,7 @@ def predict():
 
 
 @app.post("/api/predict-url")
+@require_auth
 def predict_url():
     """Milestone 7B — analyze a public job-posting URL.
 
@@ -269,6 +448,7 @@ def predict_url():
 
 
 @app.get("/api/history")
+@require_auth
 def history():
     limit = min(int(request.args.get("limit", 50)), 200)
     rows = get_db().execute(
@@ -288,6 +468,7 @@ def history():
     return jsonify(history_rows)
 
 @app.delete("/api/history")
+@require_auth
 def clear_history():
     db = get_db()
     db.execute("DELETE FROM predictions")

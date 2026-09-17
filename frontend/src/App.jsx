@@ -6,6 +6,9 @@ import Analyze from './components/Analyze.jsx'
 import History from './components/History.jsx'
 import Insights from './components/Insights.jsx'
 import About from './components/About.jsx'
+import AuthScreen from './components/AuthScreen.jsx'
+import Icon from './components/Icon.jsx'
+import { AuthProvider, useAuth } from './AuthContext.jsx'
 import { analyzeJob, analyzeJobUrl, checkHealth } from './api.js'
 import { runOcr } from './lib/ocrClient.js'
 import {
@@ -23,7 +26,42 @@ function initialPage() {
   return PAGES.has(hash) ? hash : 'home'
 }
 
+/**
+ * Milestone 8A.1 — authentication gate.
+ *
+ * App start → GET /api/auth/me:
+ *   - while the session check is running, NOTHING from the protected app is
+ *     rendered (only a minimal branded splash);
+ *   - authenticated  → the existing JobGuard application;
+ *   - anonymous      → the Sign In / Create Account screen.
+ * A 401 from any protected API later on drops the user and returns here.
+ */
 export default function App() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
+  )
+}
+
+function AuthGate() {
+  const { user, authLoading, signOut } = useAuth()
+
+  if (authLoading) {
+    return (
+      <div className="auth-splash" role="status" aria-live="polite">
+        <span className="brand-mark" aria-hidden="true">
+          <Icon name="shield" size={22} strokeWidth={2} />
+        </span>
+        <p>Checking your session…</p>
+      </div>
+    )
+  }
+  if (!user) return <AuthScreen />
+  return <JobGuardApp user={user} onSignOut={signOut} />
+}
+
+function JobGuardApp({ user, onSignOut }) {
   const [page, setPage] = useState(initialPage)
   const [backendUp, setBackendUp] = useState(null)
   const [health, setHealth] = useState(null)
@@ -217,7 +255,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <Header page={page} onNavigate={navigate} backendUp={backendUp} health={health} />
+      <Header page={page} onNavigate={navigate} backendUp={backendUp} health={health} user={user} onSignOut={onSignOut} />
       {page === 'home' && (
         <Home
           value={draft}

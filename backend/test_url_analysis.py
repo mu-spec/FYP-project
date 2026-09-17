@@ -28,6 +28,8 @@ import json
 import unittest
 from unittest import mock
 
+from auth_test_utils import signup_and_login
+
 import requests
 
 import url_fetcher
@@ -315,7 +317,8 @@ class PredictUrlApiTests(unittest.TestCase):
     def setUpClass(cls):
         import app
         cls.app_module = app
-        cls.client = app.app.test_client()
+        # 8A.1: the API now requires a session — sign the test client in.
+        cls.client, cls.test_email = signup_and_login(cls.app_module)
 
     def _post(self, url, **extra):
         return self.client.post(

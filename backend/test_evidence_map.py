@@ -124,7 +124,9 @@ class EvidenceApiTests(unittest.TestCase):
         cls.original_db_path = app.DB_PATH
         app.DB_PATH = os.path.join(cls.temp_dir.name, "evidence-test.db")
         app.init_db()
-        cls.client = app.app.test_client()
+        # 8A.1: the API now requires a session — sign the test client in.
+        from auth_test_utils import signup_and_login
+        cls.client, cls.test_email = signup_and_login(app)
 
     @classmethod
     def tearDownClass(cls):
