@@ -75,7 +75,7 @@ function TrendDot({ cx, cy, index, dataLength }) {
         cy={cy}
         r={isLatest ? 5 : 3.5}
         fill="var(--primary-bright)"
-        stroke="var(--bg)"
+        stroke="var(--surface)"
         strokeWidth={isLatest ? 2 : 1.5}
       />
       {isLatest && (
@@ -121,9 +121,9 @@ export default function ConfidenceTrend({ series }) {
         <AreaChart data={data} margin={{ top: 22, right: 24, bottom: 4, left: 0 }}>
           <defs>
             <linearGradient id="confFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#059669" stopOpacity={0.20} />
-              <stop offset="55%" stopColor="#059669" stopOpacity={0.06} />
-              <stop offset="100%" stopColor="#059669" stopOpacity={0.01} />
+              <stop offset="0%" stopColor="#F0E933" stopOpacity={0.20} />
+              <stop offset="55%" stopColor="#F0E933" stopOpacity={0.06} />
+              <stop offset="100%" stopColor="#F0E933" stopOpacity={0.01} />
             </linearGradient>
           </defs>
           <CartesianGrid stroke="var(--border)" strokeOpacity={0.55} strokeDasharray="3 6" vertical={false} />

@@ -39,7 +39,7 @@ export default function VerdictDonut({ distribution }) {
               startAngle={90}
               endAngle={-270}
               paddingAngle={slices.length > 1 ? 2 : 0}
-              stroke="var(--bg)"
+              stroke="var(--surface)"
               strokeWidth={2}
               isAnimationActive={false}
               activeIndex={activeIndex ?? undefined}
