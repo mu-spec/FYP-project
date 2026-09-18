@@ -84,15 +84,26 @@ export default function Insights({ backendUp, onNavigate }) {
         )}
 
         {backendUp && !error && stats && stats.total === 0 && (
-          <section className="empty-insights card-surface">
-            <span className="empty-icon"><Icon name="chart" size={26} /></span>
-            <span className="section-label">Nothing to summarize yet</span>
-            <h2>No analysis insights yet</h2>
-            <p>Analyze your first job to start building insights.</p>
-            <button type="button" className="btn btn-primary insights-cta" onClick={() => onNavigate?.('home')}>
-              <Icon name="search" size={17} /> Analyze a Job
-            </button>
-          </section>
+          <>
+            <section className="empty-insights card-surface">
+              <span className="empty-icon"><Icon name="chart" size={26} /></span>
+              <span className="section-label">Nothing to summarize yet</span>
+              <h2>No analysis insights yet</h2>
+              <p>Analyze your first job to start building insights.</p>
+              <button type="button" className="btn btn-primary insights-cta" onClick={() => onNavigate?.('home')}>
+                <Icon name="search" size={17} /> Analyze a Job
+              </button>
+            </section>
+            {/* 8F.2A: the trend section still renders its own real-data empty
+                state — zero records means zero chart points, never dummies. */}
+            <section className="insights-panel card-surface" aria-label="Analysis confidence trend">
+              <div className="insights-panel-head">
+                <h2>Analysis Confidence Trend</h2>
+                <span className="insights-panel-note">Model decision confidence over time</span>
+              </div>
+              <ConfidenceTrend series={stats.series} />
+            </section>
+          </>
         )}
 
         {backendUp && !error && stats && stats.total > 0 && (
@@ -132,7 +143,7 @@ export default function Insights({ backendUp, onNavigate }) {
               <section className="insights-panel card-surface" aria-label="Analysis confidence trend">
                 <div className="insights-panel-head">
                   <h2>Analysis Confidence Trend</h2>
-                  <span className="insights-panel-note">Decision confidence over time</span>
+                  <span className="insights-panel-note">Model decision confidence over time</span>
                 </div>
                 <ConfidenceTrend series={stats.series} />
               </section>

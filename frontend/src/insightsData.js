@@ -98,3 +98,24 @@ export function averageConfidence(rows) {
   if (!list.length) return 0
   return list.reduce((sum, row) => sum + (Number(row?.confidence) || 0), 0) / list.length
 }
+
+/**
+ * Milestone 8F.2A — Highest / Lowest / Average decision confidence computed
+ * over the EXACT same series the confidence chart renders
+ * (buildConfidenceSeries output — one entry per real History record). No
+ * period-over-period comparisons are invented; all three are null for an
+ * empty series so callers fall back to the empty state instead of showing
+ * zeros that look like real measurements.
+ */
+export function computeTrendSummary(series) {
+  const list = Array.isArray(series) ? series : []
+  const values = list
+    .map((point) => Number(point?.confidence))
+    .filter((value) => Number.isFinite(value))
+  if (!values.length) return { highest: null, lowest: null, average: null }
+  return {
+    highest: Math.max(...values),
+    lowest: Math.min(...values),
+    average: values.reduce((sum, value) => sum + value, 0) / values.length,
+  }
+}

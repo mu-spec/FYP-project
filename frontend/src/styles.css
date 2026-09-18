@@ -1427,6 +1427,29 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .recharts-tooltip-wrapper { outline: none; }
 .recharts-cartesian-axis-tick-value { font-family: inherit; }
 .trend-wrap, .bars-wrap { width: 100%; }
+/* 8F.2A — compact summary chips (Highest / Lowest / Average), same real series */
+.trend-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 10px; }
+.trend-chip {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 12px 7px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+.trend-chip span { color: var(--muted-light); font-size: .62rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.trend-chip strong { color: var(--ink-strong); font-size: .95rem; letter-spacing: -.01em; }
+/* 8F.2A — empty state when the signed-in user has no valid trend records */
+.trend-empty { padding: 26px 8px 30px; text-align: center; }
+.trend-empty strong { color: var(--ink); font-size: .9375rem; }
+.trend-empty p { margin: 6px auto 0; max-width: 340px; color: var(--muted); font-size: .875rem; }
+/* 8F.2A — premium tooltip rows */
+.trend-tooltip { gap: 5px; }
+.trend-tooltip-meta { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.trend-tooltip-confidence { color: var(--muted); }
+.trend-tooltip-date { border-top: 1px solid var(--border); padding-top: 5px; color: var(--muted); font-size: .75rem; }
+.chart-tooltip .trend-tooltip-confidence strong { color: var(--ink-strong); font-weight: 700; }
 .recent-list { display: grid; grid-template-columns: minmax(0, 1fr); }
 .recent-row {
   display: flex;
