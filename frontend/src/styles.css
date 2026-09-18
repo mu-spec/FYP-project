@@ -1335,14 +1335,32 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   grid-template-columns: repeat(4, 1fr);
   gap: var(--space-3);
 }
-.insight-card { padding: var(--space-4); }
+.insight-card { position: relative; padding: var(--space-4); }
+/* 8F.2B — KPI icon chips (presentation only) */
+.insight-icon {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  color: var(--primary-dark);
+  background: var(--soft-mint);
+}
+.insight-icon-scam { color: #B03A3A; background: var(--scam-soft); }
+.insight-icon-legit { color: var(--legit-bright); background: rgba(88, 185, 120, .14); }
+.insight-icon-avg { color: var(--info); background: rgba(63, 142, 219, .12); }
 .insight-value {
   display: block;
   margin: var(--space-1) 0 2px;
   color: var(--ink-strong);
-  font-size: 1.625rem;
+  font-size: 1.75rem;
   letter-spacing: -.02em;
-  line-height: 1.15;
+  line-height: 1.12;
+  font-variant-numeric: tabular-nums;
 }
 .insight-value.scam { color: var(--scam-bright); }
 .insight-value.legit { color: var(--mint); }
@@ -1365,6 +1383,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   margin-top: var(--space-3);
 }
 .insights-charts-row .insights-panel { margin-top: 0; }
+/* 8F.2B — second two-column dashboard row: Warning Signs | Recent Analyses */
+.insights-bottom-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+.insights-bottom-row .insights-panel { margin-top: 0; height: 100%; }
 .donut-chart { position: relative; }
 .donut-center {
   position: absolute;
@@ -1451,26 +1477,53 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .trend-tooltip-date { border-top: 1px solid var(--border); padding-top: 5px; color: var(--muted); font-size: .75rem; }
 .chart-tooltip .trend-tooltip-confidence strong { color: var(--ink-strong); font-weight: 700; }
 .recent-list { display: grid; grid-template-columns: minmax(0, 1fr); }
+/* 8F.2B — compact professional table presentation (same real History rows) */
 .recent-row {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
   max-width: 100%;
-  padding: var(--space-2) 0;
+  padding: 9px 6px;
   border-bottom: 1px solid var(--border);
+  border-radius: 8px;
   font-size: .875rem;
 }
 .recent-row:last-child { border-bottom: 0; }
+.recent-row:not(.recent-head):hover { background: var(--surface-soft); }
+.recent-head {
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--border-strong);
+  color: var(--muted-light);
+  font-size: .6875rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.recent-head span:not(.recent-conf):not(.recent-date) { flex: 1; min-width: 0; }
 .recent-title { flex: 1; min-width: 0; overflow: hidden; color: var(--ink); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.recent-conf { color: var(--ink); font-weight: 700; white-space: nowrap; }
+.recent-conf { color: var(--ink); font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .recent-date { color: var(--muted-light); font-size: .78125rem; white-space: nowrap; }
+/* 8F.2B — severity key strip under the warning bars (text, never color-only) */
+.bars-severity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-2) 0 0;
+  color: var(--muted);
+  font-size: .78125rem;
+  font-weight: 600;
+}
+.bars-severity-item { display: inline-flex; align-items: center; gap: 7px; }
 .insights-footnote { margin-top: var(--space-4); }
 .insights-cta { margin-top: var(--space-4); min-width: 190px; }
 @media (max-width: 1024px) {
   .insights-grid { grid-template-columns: repeat(2, 1fr); }
   /* 8F.1 — donut + trend stack vertically on tablet/mobile */
   .insights-charts-row { grid-template-columns: 1fr; }
+  /* 8F.2B — warning signs + recent analyses stack too */
+  .insights-bottom-row { grid-template-columns: 1fr; }
+  .insights-bottom-row .insights-panel { height: auto; }
 }
 @media (max-width: 760px) {
   .recent-date { display: none; }

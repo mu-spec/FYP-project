@@ -113,21 +113,25 @@ export default function Insights({ backendUp, onNavigate }) {
                 <span className="metric-label">Total jobs analyzed</span>
                 <strong className="insight-value">{stats.total.toLocaleString()}</strong>
                 <span className="metric-help">Valid predictions saved in History</span>
+                <span className="insight-icon" aria-hidden="true"><Icon name="chart" size={17} /></span>
               </article>
               <article className="insight-card card-surface">
                 <span className="metric-label">Flagged as scam</span>
                 <strong className="insight-value scam">{stats.scamCount.toLocaleString()}</strong>
                 <span className="metric-help">{toPercent01(stats.scamShare)} of all analyses</span>
+                <span className="insight-icon insight-icon-scam" aria-hidden="true"><Icon name="warning" size={17} /></span>
               </article>
               <article className="insight-card card-surface">
                 <span className="metric-label">Looked legitimate</span>
                 <strong className="insight-value legit">{stats.legitCount.toLocaleString()}</strong>
                 <span className="metric-help">{toPercent01(stats.legitShare)} of all analyses</span>
+                <span className="insight-icon insight-icon-legit" aria-hidden="true"><Icon name="check" size={17} /></span>
               </article>
               <article className="insight-card card-surface">
                 <span className="metric-label">Avg decision confidence</span>
                 <strong className="insight-value">{toPercent01(stats.avgConfidence)}</strong>
                 <span className="metric-help">Winning-class probability, all records</span>
+                <span className="insight-icon insight-icon-avg" aria-hidden="true"><Icon name="spark" size={17} /></span>
               </article>
             </section>
 
@@ -149,6 +153,7 @@ export default function Insights({ backendUp, onNavigate }) {
               </section>
             </div>
 
+            <div className="insights-bottom-row">
             <section className="insights-panel card-surface" aria-label="Most common warning signs">
               <div className="insights-panel-head">
                 <h2>Most common warning signs</h2>
@@ -168,17 +173,24 @@ export default function Insights({ backendUp, onNavigate }) {
                   View full history <Icon name="arrow" size={15} />
                 </button>
               </div>
-              <div className="recent-list">
+              <div className="recent-list" role="table" aria-label="Recent analyses">
+                <div className="recent-row recent-head" role="row">
+                  <span role="columnheader">Job title</span>
+                  <span role="columnheader">Verdict</span>
+                  <span className="recent-conf" role="columnheader">Confidence</span>
+                  <span className="recent-date" role="columnheader">Time</span>
+                </div>
                 {stats.recent.map((row) => (
-                  <div className="recent-row" key={row.id}>
-                    <span className={`table-verdict ${row.prediction === 'Scam' ? 'table-scam' : 'table-legit'}`}><span />{row.prediction}</span>
+                  <div className="recent-row" key={row.id} role="row">
                     <span className="recent-title" title={row.job_title}>{row.job_title || 'Untitled job'}</span>
+                    <span className={`table-verdict ${row.prediction === 'Scam' ? 'table-scam' : 'table-legit'}`}><span />{row.prediction}</span>
                     <span className="recent-conf">{toPercent01(row.confidence)}</span>
                     <span className="recent-date">{formatDate(row.created_at)}</span>
                   </div>
                 ))}
               </div>
             </section>
+            </div>
 
             <p className="result-footnote insights-footnote">
               <Icon name="info" size={14} />

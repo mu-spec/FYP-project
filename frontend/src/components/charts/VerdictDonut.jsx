@@ -34,7 +34,7 @@ export default function VerdictDonut({ distribution }) {
               data={slices}
               dataKey="value"
               nameKey="name"
-              innerRadius="66%"
+              innerRadius="70%"
               outerRadius="92%"
               startAngle={90}
               endAngle={-270}

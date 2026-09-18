@@ -8,7 +8,7 @@
  * longest approved category ("Excessive Capitalization").
  */
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList,
 } from 'recharts'
 import { titleCaseCategory } from '../../insightsData.js'
 
@@ -34,35 +34,53 @@ export default function WarningBars({ flags }) {
   if (!data.length) return null
   const max = data[0].count || 1
 
+  // Severity keys actually present in the user's real evidence maps —
+  // rendered as text (never color-only), no invented categories.
+  const severities = [...new Set(data.map((flag) => flag.severity).filter(Boolean))]
   return (
     <div className="bars-wrap">
-      <ResponsiveContainer width="100%" height={Math.max(160, data.length * 42 + 40)}>
-        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 46, bottom: 0, left: 4 }}>
-          <CartesianGrid stroke="var(--border)" strokeOpacity={0.55} strokeDasharray="3 6" horizontal={false} />
-          <XAxis
-            type="number"
-            domain={[0, max]}
-            allowDecimals={false}
-            tick={{ fill: 'var(--muted-light)', fontSize: 12 }}
-            stroke="var(--border-strong)"
-            tickMargin={8}
-          />
+      <ResponsiveContainer width="100%" height={Math.max(160, data.length * 44 + 34)}>
+        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 40, bottom: 0, left: 4 }}>
+          {/* Count labels at the right end of each bar make a numeric x axis
+              redundant — the axis is hidden, the counts stay exact. */}
+          <XAxis type="number" domain={[0, max]} allowDecimals={false} hide />
           <YAxis
             type="category"
             dataKey="category"
             tickFormatter={titleCaseCategory}
-            tick={{ fill: 'var(--muted)', fontSize: 12.5 }}
+            tick={{ fill: 'var(--ink)', fontSize: 12.5, fontWeight: 600 }}
             stroke="var(--border-strong)"
             width={188}
           />
           <Tooltip content={<BarsTooltip />} cursor={{ fill: 'var(--primary-soft)' }} />
-          <Bar dataKey="count" barSize={18} radius={[0, 4, 4, 0]} isAnimationActive={false}>
+          <Bar dataKey="count" barSize={16} radius={[0, 6, 6, 0]} isAnimationActive={false}>
             {data.map((flag) => (
               <Cell key={flag.category} fill={SEVERITY_COLORS[flag.severity] || 'var(--primary)'} />
             ))}
+            <LabelList
+              dataKey="count"
+              position="right"
+              offset={10}
+              fill="var(--ink-strong)"
+              fontSize={12}
+              fontWeight={700}
+            />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+      {severities.length > 0 && (
+        <div className="bars-severity">
+          {severities.map((severity) => (
+            <span className="bars-severity-item" key={severity}>
+              <span
+                className="legend-dot"
+                style={{ background: SEVERITY_COLORS[severity] || 'var(--primary)' }}
+              />
+              {titleCaseCategory(severity)} severity
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
